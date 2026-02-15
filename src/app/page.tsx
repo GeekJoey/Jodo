@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { ChevronLeft, ChevronRight, Plus, Loader2, Calendar, List, Check, X, LayoutGrid, CalendarDays, ListTodo, Inbox } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Loader2, Calendar, List, Check, X, CalendarDays, ListTodo, Inbox } from "lucide-react";
 import { TaskCard } from "@/components/TaskCard";
 import { TaskForm } from "@/components/TaskForm";
 import { TagManager } from "@/components/TagManager";
@@ -22,7 +22,7 @@ const timeSlots: { key: TimeSlot; label: string; icon: string }[] = [
   { key: "evening", label: "晚上", icon: "🌙" },
 ];
 
-type ViewMode = "week" | "day" | "list";
+type ViewMode = "day" | "list";
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -30,7 +30,7 @@ export default function Home() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<ViewMode>("week");
+  const [viewMode, setViewMode] = useState<ViewMode>("day");
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [defaultTimeSlot, setDefaultTimeSlot] = useState<TimeSlot>("morning");
@@ -50,7 +50,7 @@ export default function Home() {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  // 获取一周的日期
+  // 获取一周的日期（用于加载数据）
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
@@ -61,7 +61,15 @@ export default function Home() {
   // 加载已分配任务
   const loadTasks = useCallback(async () => {
     try {
-      const res = await fetch(`/api/tasks?start_date=${startDate}&end_date=${endDate}`);
+      // 列表视图加载更多数据
+      const loadStartDate = viewMode === "list" 
+        ? format(new Date(), "yyyy-MM-dd")
+        : startDate;
+      const loadEndDate = viewMode === "list"
+        ? format(addDays(new Date(), 365), "yyyy-MM-dd")
+        : endDate;
+      
+      const res = await fetch(`/api/tasks?start_date=${loadStartDate}&end_date=${loadEndDate}`);
       const data = await res.json();
       const transformedTasks = (data.data || []).map((task: Record<string, unknown>) => ({
         ...task,
@@ -73,28 +81,7 @@ export default function Home() {
     } catch (error) {
       console.error("Failed to load tasks:", error);
     }
-  }, [startDate, endDate]);
-
-  // 加载所有已分配任务（用于列表视图）
-  const loadAllTasks = useCallback(async () => {
-    try {
-      // 获取未来30天的任务
-      const today = format(new Date(), "yyyy-MM-dd");
-      const futureDate = format(addDays(new Date(), 365), "yyyy-MM-dd");
-      const res = await fetch(`/api/tasks?start_date=${today}&end_date=${futureDate}`);
-      const data = await res.json();
-      const transformedTasks = (data.data || []).map((task: Record<string, unknown>) => ({
-        ...task,
-        hours: parseFloat(String(task.hours)) || 0,
-        timeSlot: task.timeSlot as TimeSlot,
-        status: task.status as TaskStatus,
-      }));
-      return transformedTasks;
-    } catch (error) {
-      console.error("Failed to load all tasks:", error);
-      return [];
-    }
-  }, []);
+  }, [startDate, endDate, viewMode]);
 
   // 加载未分配任务
   const loadUnassignedTasks = useCallback(async () => {
@@ -358,19 +345,11 @@ export default function Home() {
 
   // 导航控制
   const navigatePrev = () => {
-    if (viewMode === "week") {
-      setCurrentDate(subWeeks(currentDate, 1));
-    } else {
-      setCurrentDate(addDays(currentDate, -1));
-    }
+    setCurrentDate(addDays(currentDate, -1));
   };
 
   const navigateNext = () => {
-    if (viewMode === "week") {
-      setCurrentDate(addWeeks(currentDate, 1));
-    } else {
-      setCurrentDate(addDays(currentDate, 1));
-    }
+    setCurrentDate(addDays(currentDate, 1));
   };
 
   const navigateToday = () => {
@@ -379,15 +358,10 @@ export default function Home() {
 
   // 获取当前显示的日期标题
   const getDateTitle = () => {
-    if (viewMode === "day") {
-      const dateStr = format(currentDate, "yyyy年M月d日", { locale: zhCN });
-      const weekday = format(currentDate, "EEEE", { locale: zhCN });
-      const todayMark = isToday(currentDate) ? " (今天)" : "";
-      return `${dateStr} ${weekday}${todayMark}`;
-    } else if (viewMode === "week") {
-      return `${format(weekDays[0], "yyyy年M月d日", { locale: zhCN })} - ${format(weekDays[6], "M月d日", { locale: zhCN })}`;
-    }
-    return "所有任务";
+    const dateStr = format(currentDate, "yyyy年M月d日", { locale: zhCN });
+    const weekday = format(currentDate, "EEEE", { locale: zhCN });
+    const todayMark = isToday(currentDate) ? " (今天)" : "";
+    return `${dateStr} ${weekday}${todayMark}`;
   };
 
   if (loading) {
@@ -534,25 +508,6 @@ export default function Home() {
 
             {/* 日历视图 */}
             <TabsContent value="calendar" className="mt-0">
-              {/* 视图切换 */}
-              <div className="flex items-center justify-between mb-3">
-                <ToggleGroup
-                  type="single"
-                  value={viewMode === "list" ? "day" : viewMode}
-                  onValueChange={(v) => v && setViewMode(v as ViewMode)}
-                  className="border rounded-lg"
-                >
-                  <ToggleGroupItem value="day" className="px-3 text-xs">
-                    <CalendarDays className="h-4 w-4 mr-1" />
-                    日
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="week" className="px-3 text-xs">
-                    <LayoutGrid className="h-4 w-4 mr-1" />
-                    周
-                  </ToggleGroupItem>
-                </ToggleGroup>
-              </div>
-
               {/* 日期导航 */}
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
@@ -569,147 +524,105 @@ export default function Home() {
                 <span className="text-sm font-medium">{getDateTitle()}</span>
               </div>
 
-              {/* 周视图：日期选择器 */}
-              {viewMode === "week" && (
-                <div className="flex gap-1 mb-3 overflow-x-auto pb-2">
-                  {weekDays.map((day) => {
-                    const dateStr = format(day, "yyyy-MM-dd");
-                    const isTodayDate = isSameDay(day, new Date());
-                    const dayTasks = tasks.filter((t) => t.date === dateStr);
-                    const isSelected = selectedDate === dateStr;
-
-                    return (
-                      <button
-                        key={dateStr}
-                        onClick={() => setSelectedDate(dateStr)}
-                        className={`flex-shrink-0 w-12 py-2 rounded-lg text-center transition-colors ${
-                          isSelected
-                            ? "bg-primary text-primary-foreground"
-                            : isTodayDate
-                            ? "bg-muted border border-primary"
-                            : "bg-muted/50 hover:bg-muted"
-                        }`}
-                      >
-                        <div className="text-xs">{format(day, "EEE", { locale: zhCN })}</div>
-                        <div className="text-lg font-bold">{format(day, "d")}</div>
-                        {dayTasks.length > 0 && (
-                          <div className="flex justify-center gap-0.5 mt-1">
-                            {dayTasks.slice(0, 3).map((_, i) => (
-                              <div
-                                key={i}
-                                className={`w-1.5 h-1.5 rounded-full ${
-                                  isSelected ? "bg-primary-foreground/50" : "bg-primary"
-                                }`}
-                              />
-                            ))}
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-
               {/* 时段列表 */}
               <div className="space-y-3">
-                {(viewMode === "day" ? [format(currentDate, "yyyy-MM-dd")] : [selectedDate]).map((displayDate) =>
-                  timeSlots.map((slot) => {
-                    const slotTasks = getTasksByDateAndSlot(displayDate, slot.key);
-                    const totalHours = getTotalHours(displayDate, slot.key);
+                {timeSlots.map((slot) => {
+                  const dateStr = format(currentDate, "yyyy-MM-dd");
+                  const slotTasks = getTasksByDateAndSlot(dateStr, slot.key);
+                  const totalHours = getTotalHours(dateStr, slot.key);
 
-                    return (
-                      <Card key={`${displayDate}-${slot.key}`}>
-                        <CardHeader className="pb-1 pt-2 px-3">
-                          <div className="flex items-center justify-between">
-                            <CardTitle className="text-sm flex items-center gap-2">
-                              <span>{slot.icon}</span>
-                              {slot.label}
-                              {totalHours > 0 && (
-                                <Badge variant="secondary" className="text-xs">
-                                  {totalHours}h
-                                </Badge>
-                              )}
-                            </CardTitle>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => openNewTaskForm(displayDate, slot.key)}
-                            >
-                              <Plus className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="pt-1 pb-2 px-3">
-                          <div
-                            onClick={() => handleSlotClick(displayDate, slot.key)}
-                            className={`min-h-[40px] rounded transition-colors ${
-                              selectedTask ? "border-2 border-dashed border-muted-foreground/30 cursor-pointer hover:bg-muted/50" : ""
-                            }`}
-                          >
-                            {slotTasks.length === 0 ? (
-                              <div className="flex items-center justify-center h-[40px] text-xs text-muted-foreground/50">
-                                {selectedTask ? "点击放置" : "暂无任务"}
-                              </div>
-                            ) : (
-                              <div className="space-y-1">
-                                {slotTasks.map((task) => {
-                                  const tag = getTagById(task.tagId);
-                                  const isSelected = selectedTask?.id === task.id;
-                                  return (
-                                    <div
-                                      key={task.id}
-                                      onClick={() => handleTaskClick(task)}
-                                      className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer transition-colors ${
-                                        isSelected
-                                          ? "bg-primary/10 border border-primary"
-                                          : "bg-muted/50 hover:bg-muted"
-                                      }`}
-                                    >
-                                      <span className={`text-xs truncate flex-1 ${task.status === "completed" ? "line-through text-muted-foreground" : ""}`}>
-                                        {task.title}
-                                      </span>
-                                      <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">
-                                        {task.hours}h
-                                      </Badge>
-                                      {tag && (
-                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: tag.color }} />
-                                      )}
-                                      <div className="flex items-center gap-0.5">
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-5 w-5"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleStatusChange(task.id, task.status === "completed" ? "pending" : "completed");
-                                          }}
-                                        >
-                                          {task.status === "completed" ? <X className="h-3 w-3" /> : <Check className="h-3 w-3" />}
-                                        </Button>
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-5 w-5"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            openEditTaskForm(task);
-                                          }}
-                                        >
-                                          <Plus className="h-3 w-3 rotate-45" />
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
+                  return (
+                    <Card key={slot.key}>
+                      <CardHeader className="pb-1 pt-2 px-3">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-sm flex items-center gap-2">
+                            <span>{slot.icon}</span>
+                            {slot.label}
+                            {totalHours > 0 && (
+                              <Badge variant="secondary" className="text-xs">
+                                {totalHours}h
+                              </Badge>
                             )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })
-                )}
+                          </CardTitle>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => openNewTaskForm(dateStr, slot.key)}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="pt-1 pb-2 px-3">
+                        <div
+                          onClick={() => handleSlotClick(dateStr, slot.key)}
+                          className={`min-h-[40px] rounded transition-colors ${
+                            selectedTask ? "border-2 border-dashed border-muted-foreground/30 cursor-pointer hover:bg-muted/50" : ""
+                          }`}
+                        >
+                          {slotTasks.length === 0 ? (
+                            <div className="flex items-center justify-center h-[40px] text-xs text-muted-foreground/50">
+                              {selectedTask ? "点击放置" : "暂无任务"}
+                            </div>
+                          ) : (
+                            <div className="space-y-1">
+                              {slotTasks.map((task) => {
+                                const tag = getTagById(task.tagId);
+                                const isSelected = selectedTask?.id === task.id;
+                                return (
+                                  <div
+                                    key={task.id}
+                                    onClick={() => handleTaskClick(task)}
+                                    className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer transition-colors ${
+                                      isSelected
+                                        ? "bg-primary/10 border border-primary"
+                                        : "bg-muted/50 hover:bg-muted"
+                                    }`}
+                                  >
+                                    <span className={`text-xs truncate flex-1 ${task.status === "completed" ? "line-through text-muted-foreground" : ""}`}>
+                                      {task.title}
+                                    </span>
+                                    <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">
+                                      {task.hours}h
+                                    </Badge>
+                                    {tag && (
+                                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: tag.color }} />
+                                    )}
+                                    <div className="flex items-center gap-0.5">
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-5 w-5"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleStatusChange(task.id, task.status === "completed" ? "pending" : "completed");
+                                        }}
+                                      >
+                                        {task.status === "completed" ? <X className="h-3 w-3" /> : <Check className="h-3 w-3" />}
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-5 w-5"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          openEditTaskForm(task);
+                                        }}
+                                      >
+                                        <Plus className="h-3 w-3 rotate-45" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             </TabsContent>
 
@@ -721,15 +634,11 @@ export default function Home() {
                 onEdit={openEditTaskForm}
                 onDelete={handleDeleteTask}
                 onStatusChange={handleStatusChange}
-                onAddTask={() => {
-                  setSelectedDate(format(new Date(), "yyyy-MM-dd"));
-                  setDefaultTimeSlot("morning");
-                  setDefaultUnassigned(false);
-                  setEditingTask(null);
-                  setShowTaskForm(true);
-                }}
+                onAssignTask={handleAssignTask}
+                onAddTask={openNewTaskForm}
                 onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
+                draggedTask={draggedTask}
               />
             </TabsContent>
           </Tabs>
@@ -806,7 +715,9 @@ export default function Home() {
             )}
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm font-medium">{getDateTitle()}</span>
+            {viewMode !== "list" && (
+              <span className="text-sm font-medium">{getDateTitle()}</span>
+            )}
             <ToggleGroup
               type="single"
               value={viewMode}
@@ -815,11 +726,7 @@ export default function Home() {
             >
               <ToggleGroupItem value="day" className="px-3">
                 <CalendarDays className="h-4 w-4 mr-1" />
-                日
-              </ToggleGroupItem>
-              <ToggleGroupItem value="week" className="px-3">
-                <LayoutGrid className="h-4 w-4 mr-1" />
-                周
+                日视图
               </ToggleGroupItem>
               <ToggleGroupItem value="list" className="px-3">
                 <ListTodo className="h-4 w-4 mr-1" />
@@ -828,93 +735,6 @@ export default function Home() {
             </ToggleGroup>
           </div>
         </div>
-
-        {/* 周视图 */}
-        {viewMode === "week" && (
-          <div className="grid grid-cols-7 gap-1.5">
-            {weekDays.map((day) => {
-              const dateStr = format(day, "yyyy-MM-dd");
-              const isTodayDate = isSameDay(day, new Date());
-
-              return (
-                <Card
-                  key={dateStr}
-                  className={`min-h-[350px] ${isTodayDate ? "ring-2 ring-primary" : ""}`}
-                >
-                  <CardHeader className="p-2 pb-1">
-                    <CardTitle className="text-xs font-medium flex items-center justify-between">
-                      <span>{format(day, "EEE", { locale: zhCN })}</span>
-                      <span
-                        className={`text-xs ${isTodayDate ? "bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full" : ""}`}
-                      >
-                        {format(day, "d")}
-                      </span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-1.5 pt-0 space-y-1">
-                    {timeSlots.map((slot) => {
-                      const slotTasks = getTasksByDateAndSlot(dateStr, slot.key);
-                      const totalHours = getTotalHours(dateStr, slot.key);
-                      const isDropTarget = draggedTask !== null;
-
-                      return (
-                        <div
-                          key={slot.key}
-                          className={`p-1 rounded transition-colors ${
-                            isDropTarget ? "bg-muted/50" : ""
-                          }`}
-                          onDragOver={handleDragOver}
-                          onDrop={(e) => handleDrop(e, dateStr, slot.key)}
-                        >
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-[10px] text-muted-foreground">
-                              {slot.icon} {slot.label}
-                            </span>
-                            <div className="flex items-center gap-0.5">
-                              {totalHours > 0 && (
-                                <Badge variant="secondary" className="text-[9px] px-1 py-0 h-3.5">
-                                  {totalHours}h
-                                </Badge>
-                              )}
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-4 w-4"
-                                onClick={() => openNewTaskForm(dateStr, slot.key)}
-                              >
-                                <Plus className="h-2.5 w-2.5" />
-                              </Button>
-                            </div>
-                          </div>
-
-                          <div className="space-y-0.5 min-h-[30px]">
-                            {slotTasks.map((task) => (
-                              <TaskCard
-                                key={task.id}
-                                task={task}
-                                tag={getTagById(task.tagId)}
-                                onEdit={openEditTaskForm}
-                                onDelete={handleDeleteTask}
-                                onStatusChange={handleStatusChange}
-                                onDragStart={handleDragStart}
-                                onDragEnd={handleDragEnd}
-                              />
-                            ))}
-                            {slotTasks.length === 0 && isDropTarget && (
-                              <div className="text-[9px] text-muted-foreground/50 text-center py-1 border border-dashed border-muted-foreground/20 rounded">
-                                放置
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
 
         {/* 日视图 */}
         {viewMode === "day" && (
@@ -991,15 +811,11 @@ export default function Home() {
             onEdit={openEditTaskForm}
             onDelete={handleDeleteTask}
             onStatusChange={handleStatusChange}
-            onAddTask={() => {
-              setSelectedDate(format(new Date(), "yyyy-MM-dd"));
-              setDefaultTimeSlot("morning");
-              setDefaultUnassigned(false);
-              setEditingTask(null);
-              setShowTaskForm(true);
-            }}
+            onAssignTask={handleAssignTask}
+            onAddTask={openNewTaskForm}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
+            draggedTask={draggedTask}
           />
         )}
 
