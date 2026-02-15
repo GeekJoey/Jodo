@@ -11,7 +11,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Clock, Pencil, Trash2, GripVertical, Plus } from "lucide-react";
+import { Clock, Pencil, Trash2, GripVertical, Plus, Inbox } from "lucide-react";
 import { Task, Tag } from "@/types";
 
 interface TaskPoolProps {
@@ -22,12 +22,14 @@ interface TaskPoolProps {
   onDragStart: (e: React.DragEvent, task: Task) => void;
   onDragEnd: (e: React.DragEvent) => void;
   onAddTask: () => void;
+  onDropToPool?: (taskId: string) => void;
 }
 
-export function TaskPool({ tasks, tags, onEdit, onDelete, onDragStart, onDragEnd, onAddTask }: TaskPoolProps) {
+export function TaskPool({ tasks, tags, onEdit, onDelete, onDragStart, onDragEnd, onAddTask, onDropToPool }: TaskPoolProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -51,11 +53,39 @@ export function TaskPool({ tasks, tags, onEdit, onDelete, onDragStart, onDragEnd
     return tags.find((tag) => tag.id === tagId);
   };
 
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    try {
+      const data = JSON.parse(e.dataTransfer.getData("application/json"));
+      if (data.taskId && onDropToPool) {
+        onDropToPool(data.taskId);
+      }
+    } catch (err) {
+      console.error("Failed to parse drop data:", err);
+    }
+  };
+
   return (
-    <Card className="mb-6">
-      <CardHeader className="pb-3">
+    <Card
+      className={`mb-6 transition-colors ${isDragOver ? "ring-2 ring-primary bg-primary/5" : ""}`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      <CardHeader className="pb-2 pt-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
+            <Inbox className="h-5 w-5" />
             待办事项池
             <Badge variant="secondary" className="ml-2">
               {tasks.length}
@@ -66,18 +96,19 @@ export function TaskPool({ tasks, tags, onEdit, onDelete, onDragStart, onDragEnd
             添加待办
           </Button>
         </div>
-        <p className="text-sm text-muted-foreground hidden md:block">
-          拖拽任务到下方日历的日期和时段进行分配
+        <p className="text-xs text-muted-foreground hidden md:block">
+          拖拽任务到此区域移回待办，或从待办拖拽到日历进行分配
         </p>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-1">
         {tasks.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
+          <div className="text-center py-6 text-muted-foreground border-2 border-dashed border-muted-foreground/20 rounded-lg">
+            <Inbox className="h-8 w-8 mx-auto mb-2 opacity-50" />
             <p className="text-sm">暂无待办事项</p>
-            <p className="text-xs mt-1">点击上方「添加待办」创建新任务</p>
+            <p className="text-xs mt-1">拖拽已分配任务到此处移回待办</p>
           </div>
         ) : (
-          <div className={`flex ${isMobile ? "flex-col" : "flex-wrap"} gap-2`}>
+          <div className={`flex ${isMobile ? "flex-col" : "flex-wrap"} gap-1.5`}>
             {tasks.map((task) => {
               const tag = getTagById(task.tagId);
               return (
@@ -86,56 +117,53 @@ export function TaskPool({ tasks, tags, onEdit, onDelete, onDragStart, onDragEnd
                   draggable={!isMobile}
                   onDragStart={(e) => !isMobile && onDragStart(e, task)}
                   onDragEnd={onDragEnd}
-                  className={`group flex items-center gap-2 px-3 py-2 bg-muted/50 rounded-lg transition-colors border border-transparent hover:border-border ${
+                  className={`group flex items-center gap-2 px-2.5 py-1.5 bg-muted/50 rounded-md transition-colors border border-transparent hover:border-border ${
                     isMobile ? "" : "cursor-grab active:cursor-grabbing hover:bg-muted"
                   }`}
                 >
                   {!isMobile && (
-                    <GripVertical className="h-4 w-4 text-muted-foreground opacity-50 group-hover:opacity-100" />
+                    <GripVertical className="h-3.5 w-3.5 text-muted-foreground opacity-50 group-hover:opacity-100" />
                   )}
 
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <span className="font-medium text-sm truncate">{task.title}</span>
+                  <span className="font-medium text-sm truncate max-w-[200px]">{task.title}</span>
 
-                    <Badge variant="outline" className="text-xs shrink-0">
-                      <Clock className="h-3 w-3 mr-1" />
-                      {task.hours}h
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 shrink-0">
+                    {task.hours}h
+                  </Badge>
+
+                  {tag && (
+                    <Badge
+                      style={{ backgroundColor: tag.color, color: "#fff" }}
+                      className="text-[10px] px-1.5 py-0 h-4 shrink-0"
+                    >
+                      {tag.name}
                     </Badge>
+                  )}
 
-                    {tag && (
-                      <Badge
-                        style={{ backgroundColor: tag.color, color: "#fff" }}
-                        className="text-xs shrink-0"
-                      >
-                        {tag.name}
-                      </Badge>
-                    )}
-                  </div>
-
-                  <div className={`flex items-center gap-1 ${isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100"} transition-opacity`}>
+                  <div className={`flex items-center gap-0.5 ml-auto ${isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100"} transition-opacity`}>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7"
+                      className="h-6 w-6"
                       onClick={(e) => {
                         e.stopPropagation();
                         onEdit(task);
                       }}
                     >
-                      <Pencil className="h-3.5 w-3.5" />
+                      <Pencil className="h-3 w-3" />
                     </Button>
 
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7 text-destructive"
+                      className="h-6 w-6 text-destructive"
                       onClick={(e) => {
                         e.stopPropagation();
                         setTaskToDelete(task);
                         setShowDeleteDialog(true);
                       }}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>
                 </div>

@@ -1,18 +1,19 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { format, addDays, startOfWeek, isSameDay, addWeeks, subWeeks, isToday, parseISO } from "date-fns";
+import { format, addDays, startOfWeek, isSameDay, addWeeks, subWeeks, isToday } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { ChevronLeft, ChevronRight, Plus, Loader2, Calendar, List, Check, X, LayoutGrid, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Loader2, Calendar, List, Check, X, LayoutGrid, CalendarDays, ListTodo, Inbox } from "lucide-react";
 import { TaskCard } from "@/components/TaskCard";
 import { TaskForm } from "@/components/TaskForm";
 import { TagManager } from "@/components/TagManager";
 import { TaskPool } from "@/components/TaskPool";
+import { TaskListView } from "@/components/TaskListView";
 import { Task, Tag, InsertTask, TimeSlot, TaskStatus } from "@/types";
 
 const timeSlots: { key: TimeSlot; label: string; icon: string }[] = [
@@ -21,7 +22,7 @@ const timeSlots: { key: TimeSlot; label: string; icon: string }[] = [
   { key: "evening", label: "晚上", icon: "🌙" },
 ];
 
-type ViewMode = "week" | "day";
+type ViewMode = "week" | "day" | "list";
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -73,6 +74,27 @@ export default function Home() {
       console.error("Failed to load tasks:", error);
     }
   }, [startDate, endDate]);
+
+  // 加载所有已分配任务（用于列表视图）
+  const loadAllTasks = useCallback(async () => {
+    try {
+      // 获取未来30天的任务
+      const today = format(new Date(), "yyyy-MM-dd");
+      const futureDate = format(addDays(new Date(), 365), "yyyy-MM-dd");
+      const res = await fetch(`/api/tasks?start_date=${today}&end_date=${futureDate}`);
+      const data = await res.json();
+      const transformedTasks = (data.data || []).map((task: Record<string, unknown>) => ({
+        ...task,
+        hours: parseFloat(String(task.hours)) || 0,
+        timeSlot: task.timeSlot as TimeSlot,
+        status: task.status as TaskStatus,
+      }));
+      return transformedTasks;
+    } catch (error) {
+      console.error("Failed to load all tasks:", error);
+      return [];
+    }
+  }, []);
 
   // 加载未分配任务
   const loadUnassignedTasks = useCallback(async () => {
@@ -250,7 +272,7 @@ export default function Home() {
     }
   };
 
-  // 拖拽开始（桌面端）
+  // 拖拽开始
   const handleDragStart = (e: React.DragEvent, task: Task) => {
     setDraggedTask(task);
     e.dataTransfer.setData("application/json", JSON.stringify({ taskId: task.id, type: "task" }));
@@ -268,7 +290,7 @@ export default function Home() {
     e.dataTransfer.dropEffect = "move";
   };
 
-  // 放置任务（桌面端拖拽）
+  // 放置任务
   const handleDrop = (e: React.DragEvent, date: string, timeSlot: TimeSlot) => {
     e.preventDefault();
     if (draggedTask) {
@@ -334,13 +356,6 @@ export default function Home() {
       .reduce((sum, t) => sum + t.hours, 0);
   };
 
-  // 计算某天的总小时数
-  const getDayTotalHours = (date: string) => {
-    return tasks
-      .filter((t) => t.date === date && t.status === "pending")
-      .reduce((sum, t) => sum + t.hours, 0);
-  };
-
   // 导航控制
   const navigatePrev = () => {
     if (viewMode === "week") {
@@ -369,9 +384,10 @@ export default function Home() {
       const weekday = format(currentDate, "EEEE", { locale: zhCN });
       const todayMark = isToday(currentDate) ? " (今天)" : "";
       return `${dateStr} ${weekday}${todayMark}`;
-    } else {
+    } else if (viewMode === "week") {
       return `${format(weekDays[0], "yyyy年M月d日", { locale: zhCN })} - ${format(weekDays[6], "M月d日", { locale: zhCN })}`;
     }
+    return "所有任务";
   };
 
   if (loading) {
@@ -408,13 +424,15 @@ export default function Home() {
                     <span className="font-medium text-sm">{selectedTask.title}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleUnassignTask(selectedTask.id)}
-                    >
-                      移回待办
-                    </Button>
+                    {selectedTask.date && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleUnassignTask(selectedTask.id)}
+                      >
+                        移回待办
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -430,14 +448,18 @@ export default function Home() {
           )}
 
           <Tabs defaultValue="pool" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-4">
+            <TabsList className="grid w-full grid-cols-3 mb-4">
               <TabsTrigger value="pool">
-                <List className="h-4 w-4 mr-1" />
+                <Inbox className="h-4 w-4 mr-1" />
                 待办 ({unassignedTasks.length})
               </TabsTrigger>
               <TabsTrigger value="calendar">
                 <Calendar className="h-4 w-4 mr-1" />
                 日历
+              </TabsTrigger>
+              <TabsTrigger value="list">
+                <ListTodo className="h-4 w-4 mr-1" />
+                列表
               </TabsTrigger>
             </TabsList>
 
@@ -456,6 +478,7 @@ export default function Home() {
                 <CardContent className="pt-2">
                   {unassignedTasks.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
+                      <Inbox className="h-8 w-8 mx-auto mb-2 opacity-50" />
                       <p className="text-sm">暂无待办事项</p>
                     </div>
                   ) : (
@@ -489,19 +512,17 @@ export default function Home() {
                                 )}
                               </div>
                             </div>
-                            <div className="flex items-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openEditTaskForm(task);
-                                }}
-                              >
-                                <Plus className="h-4 w-4 rotate-45" />
-                              </Button>
-                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEditTaskForm(task);
+                              }}
+                            >
+                              <Plus className="h-4 w-4 rotate-45" />
+                            </Button>
                           </div>
                         );
                       })}
@@ -517,7 +538,7 @@ export default function Home() {
               <div className="flex items-center justify-between mb-3">
                 <ToggleGroup
                   type="single"
-                  value={viewMode}
+                  value={viewMode === "list" ? "day" : viewMode}
                   onValueChange={(v) => v && setViewMode(v as ViewMode)}
                   className="border rounded-lg"
                 >
@@ -598,7 +619,7 @@ export default function Home() {
 
                     return (
                       <Card key={`${displayDate}-${slot.key}`}>
-                        <CardHeader className="pb-2 pt-3">
+                        <CardHeader className="pb-1 pt-2 px-3">
                           <div className="flex items-center justify-between">
                             <CardTitle className="text-sm flex items-center gap-2">
                               <span>{slot.icon}</span>
@@ -612,26 +633,26 @@ export default function Home() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7"
+                              className="h-6 w-6"
                               onClick={() => openNewTaskForm(displayDate, slot.key)}
                             >
                               <Plus className="h-4 w-4" />
                             </Button>
                           </div>
                         </CardHeader>
-                        <CardContent className="pt-2">
+                        <CardContent className="pt-1 pb-2 px-3">
                           <div
                             onClick={() => handleSlotClick(displayDate, slot.key)}
-                            className={`min-h-[60px] rounded-lg transition-colors ${
+                            className={`min-h-[40px] rounded transition-colors ${
                               selectedTask ? "border-2 border-dashed border-muted-foreground/30 cursor-pointer hover:bg-muted/50" : ""
                             }`}
                           >
                             {slotTasks.length === 0 ? (
-                              <div className="flex items-center justify-center h-[60px] text-xs text-muted-foreground/50">
-                                {selectedTask ? "点击放置任务" : "暂无任务"}
+                              <div className="flex items-center justify-center h-[40px] text-xs text-muted-foreground/50">
+                                {selectedTask ? "点击放置" : "暂无任务"}
                               </div>
                             ) : (
-                              <div className="space-y-2">
+                              <div className="space-y-1">
                                 {slotTasks.map((task) => {
                                   const tag = getTagById(task.tagId);
                                   const isSelected = selectedTask?.id === task.id;
@@ -639,56 +660,43 @@ export default function Home() {
                                     <div
                                       key={task.id}
                                       onClick={() => handleTaskClick(task)}
-                                      className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors ${
+                                      className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer transition-colors ${
                                         isSelected
-                                          ? "bg-primary/10 border-2 border-primary"
-                                          : "bg-muted/50 border-2 border-transparent"
+                                          ? "bg-primary/10 border border-primary"
+                                          : "bg-muted/50 hover:bg-muted"
                                       }`}
                                     >
-                                      <div className="flex-1 min-w-0">
-                                        <div className={`font-medium text-sm truncate ${task.status === "completed" ? "line-through text-muted-foreground" : ""}`}>
-                                          {task.title}
-                                        </div>
-                                        <div className="flex items-center gap-2 mt-1">
-                                          <Badge variant="outline" className="text-xs">
-                                            {task.hours}h
-                                          </Badge>
-                                          {tag && (
-                                            <Badge
-                                              style={{ backgroundColor: tag.color, color: "#fff" }}
-                                              className="text-xs"
-                                            >
-                                              {tag.name}
-                                            </Badge>
-                                          )}
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-1">
+                                      <span className={`text-xs truncate flex-1 ${task.status === "completed" ? "line-through text-muted-foreground" : ""}`}>
+                                        {task.title}
+                                      </span>
+                                      <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">
+                                        {task.hours}h
+                                      </Badge>
+                                      {tag && (
+                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: tag.color }} />
+                                      )}
+                                      <div className="flex items-center gap-0.5">
                                         <Button
                                           variant="ghost"
                                           size="icon"
-                                          className="h-7 w-7"
+                                          className="h-5 w-5"
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             handleStatusChange(task.id, task.status === "completed" ? "pending" : "completed");
                                           }}
                                         >
-                                          {task.status === "completed" ? (
-                                            <X className="h-4 w-4" />
-                                          ) : (
-                                            <Check className="h-4 w-4" />
-                                          )}
+                                          {task.status === "completed" ? <X className="h-3 w-3" /> : <Check className="h-3 w-3" />}
                                         </Button>
                                         <Button
                                           variant="ghost"
                                           size="icon"
-                                          className="h-7 w-7"
+                                          className="h-5 w-5"
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             openEditTaskForm(task);
                                           }}
                                         >
-                                          <Plus className="h-4 w-4 rotate-45" />
+                                          <Plus className="h-3 w-3 rotate-45" />
                                         </Button>
                                       </div>
                                     </div>
@@ -703,6 +711,26 @@ export default function Home() {
                   })
                 )}
               </div>
+            </TabsContent>
+
+            {/* 列表视图 */}
+            <TabsContent value="list" className="mt-0">
+              <TaskListView
+                tasks={tasks}
+                tags={tags}
+                onEdit={openEditTaskForm}
+                onDelete={handleDeleteTask}
+                onStatusChange={handleStatusChange}
+                onAddTask={() => {
+                  setSelectedDate(format(new Date(), "yyyy-MM-dd"));
+                  setDefaultTimeSlot("morning");
+                  setDefaultUnassigned(false);
+                  setEditingTask(null);
+                  setShowTaskForm(true);
+                }}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+              />
             </TabsContent>
           </Tabs>
         </div>
@@ -733,11 +761,11 @@ export default function Home() {
     <div className="min-h-screen bg-background">
       <div className="container mx-auto p-4 max-w-7xl">
         {/* 头部 */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-2xl font-bold">任务管理</h1>
             <p className="text-sm text-muted-foreground">
-              按日历规划你的一天，拖拽待办事项进行分配
+              拖拽待办事项到日历进行分配，或拖回待办池
             </p>
           </div>
           <TagManager
@@ -757,20 +785,25 @@ export default function Home() {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
           onAddTask={openNewUnassignedTaskForm}
+          onDropToPool={handleUnassignTask}
         />
 
         {/* 导航和视图切换 */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" onClick={navigatePrev}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="icon" onClick={navigateNext}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" onClick={navigateToday}>
-              今天
-            </Button>
+            {viewMode !== "list" && (
+              <>
+                <Button variant="outline" size="icon" onClick={navigatePrev}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="icon" onClick={navigateNext}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" onClick={navigateToday}>
+                  今天
+                </Button>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-4">
             <span className="text-sm font-medium">{getDateTitle()}</span>
@@ -782,11 +815,15 @@ export default function Home() {
             >
               <ToggleGroupItem value="day" className="px-3">
                 <CalendarDays className="h-4 w-4 mr-1" />
-                日视图
+                日
               </ToggleGroupItem>
               <ToggleGroupItem value="week" className="px-3">
                 <LayoutGrid className="h-4 w-4 mr-1" />
-                周视图
+                周
+              </ToggleGroupItem>
+              <ToggleGroupItem value="list" className="px-3">
+                <ListTodo className="h-4 w-4 mr-1" />
+                列表
               </ToggleGroupItem>
             </ToggleGroup>
           </div>
@@ -794,7 +831,7 @@ export default function Home() {
 
         {/* 周视图 */}
         {viewMode === "week" && (
-          <div className="grid grid-cols-7 gap-2">
+          <div className="grid grid-cols-7 gap-1.5">
             {weekDays.map((day) => {
               const dateStr = format(day, "yyyy-MM-dd");
               const isTodayDate = isSameDay(day, new Date());
@@ -802,19 +839,19 @@ export default function Home() {
               return (
                 <Card
                   key={dateStr}
-                  className={`min-h-[400px] ${isTodayDate ? "ring-2 ring-primary" : ""}`}
+                  className={`min-h-[350px] ${isTodayDate ? "ring-2 ring-primary" : ""}`}
                 >
-                  <CardHeader className="p-3 pb-2">
-                    <CardTitle className="text-sm font-medium flex items-center justify-between">
+                  <CardHeader className="p-2 pb-1">
+                    <CardTitle className="text-xs font-medium flex items-center justify-between">
                       <span>{format(day, "EEE", { locale: zhCN })}</span>
                       <span
-                        className={`text-xs ${isTodayDate ? "bg-primary text-primary-foreground px-2 py-0.5 rounded-full" : ""}`}
+                        className={`text-xs ${isTodayDate ? "bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full" : ""}`}
                       >
                         {format(day, "d")}
                       </span>
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="p-2 pt-0 space-y-3">
+                  <CardContent className="p-1.5 pt-0 space-y-1">
                     {timeSlots.map((slot) => {
                       const slotTasks = getTasksByDateAndSlot(dateStr, slot.key);
                       const totalHours = getTotalHours(dateStr, slot.key);
@@ -823,35 +860,34 @@ export default function Home() {
                       return (
                         <div
                           key={slot.key}
-                          className={`space-y-2 p-1 -m-1 rounded transition-colors ${
+                          className={`p-1 rounded transition-colors ${
                             isDropTarget ? "bg-muted/50" : ""
                           }`}
                           onDragOver={handleDragOver}
                           onDrop={(e) => handleDrop(e, dateStr, slot.key)}
                         >
-                          <div className="flex items-center justify-between px-1">
-                            <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                              <span>{slot.icon}</span>
-                              {slot.label}
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] text-muted-foreground">
+                              {slot.icon} {slot.label}
                             </span>
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-0.5">
                               {totalHours > 0 && (
-                                <Badge variant="secondary" className="text-[10px] px-1.5">
+                                <Badge variant="secondary" className="text-[9px] px-1 py-0 h-3.5">
                                   {totalHours}h
                                 </Badge>
                               )}
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-5 w-5"
+                                className="h-4 w-4"
                                 onClick={() => openNewTaskForm(dateStr, slot.key)}
                               >
-                                <Plus className="h-3 w-3" />
+                                <Plus className="h-2.5 w-2.5" />
                               </Button>
                             </div>
                           </div>
 
-                          <div className="space-y-1.5 min-h-[60px]">
+                          <div className="space-y-0.5 min-h-[30px]">
                             {slotTasks.map((task) => (
                               <TaskCard
                                 key={task.id}
@@ -864,9 +900,9 @@ export default function Home() {
                                 onDragEnd={handleDragEnd}
                               />
                             ))}
-                            {slotTasks.length === 0 && (
-                              <div className="text-[10px] text-muted-foreground/50 text-center py-4 border border-dashed border-muted-foreground/20 rounded">
-                                {isDropTarget ? "放置到此处" : "暂无任务"}
+                            {slotTasks.length === 0 && isDropTarget && (
+                              <div className="text-[9px] text-muted-foreground/50 text-center py-1 border border-dashed border-muted-foreground/20 rounded">
+                                放置
                               </div>
                             )}
                           </div>
@@ -890,16 +926,16 @@ export default function Home() {
               const isDropTarget = draggedTask !== null;
 
               return (
-                <Card key={slot.key} className="min-h-[500px]">
-                  <CardHeader className="p-4 pb-2">
+                <Card key={slot.key} className="min-h-[400px]">
+                  <CardHeader className="p-3 pb-2">
                     <CardTitle className="flex items-center justify-between">
-                      <span className="flex items-center gap-2 text-lg">
-                        <span className="text-2xl">{slot.icon}</span>
+                      <span className="flex items-center gap-2 text-base">
+                        <span className="text-xl">{slot.icon}</span>
                         {slot.label}
                       </span>
                       <div className="flex items-center gap-2">
                         {totalHours > 0 && (
-                          <Badge variant="secondary">
+                          <Badge variant="secondary" className="text-xs">
                             {totalHours} 小时
                           </Badge>
                         )}
@@ -915,13 +951,13 @@ export default function Home() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent
-                    className={`p-4 pt-2 ${isDropTarget ? "bg-muted/30 rounded-lg" : ""}`}
+                    className={`p-3 pt-0 ${isDropTarget ? "bg-muted/30 rounded-lg" : ""}`}
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, dateStr, slot.key)}
                   >
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                       {slotTasks.length === 0 ? (
-                        <div className="text-sm text-muted-foreground/50 text-center py-8 border-2 border-dashed border-muted-foreground/20 rounded-lg">
+                        <div className="text-sm text-muted-foreground/50 text-center py-6 border-2 border-dashed border-muted-foreground/20 rounded-lg">
                           {isDropTarget ? "放置到此处" : "暂无任务"}
                         </div>
                       ) : (
@@ -935,6 +971,7 @@ export default function Home() {
                             onStatusChange={handleStatusChange}
                             onDragStart={handleDragStart}
                             onDragEnd={handleDragEnd}
+                            compact={false}
                           />
                         ))
                       )}
@@ -944,6 +981,26 @@ export default function Home() {
               );
             })}
           </div>
+        )}
+
+        {/* 列表视图 */}
+        {viewMode === "list" && (
+          <TaskListView
+            tasks={tasks}
+            tags={tags}
+            onEdit={openEditTaskForm}
+            onDelete={handleDeleteTask}
+            onStatusChange={handleStatusChange}
+            onAddTask={() => {
+              setSelectedDate(format(new Date(), "yyyy-MM-dd"));
+              setDefaultTimeSlot("morning");
+              setDefaultUnassigned(false);
+              setEditingTask(null);
+              setShowTaskForm(true);
+            }}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          />
         )}
 
         {/* 任务表单 */}

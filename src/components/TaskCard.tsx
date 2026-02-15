@@ -29,13 +29,8 @@ interface TaskCardProps {
   onDragStart?: (e: React.DragEvent, task: Task) => void;
   onDragEnd?: (e: React.DragEvent) => void;
   draggable?: boolean;
+  compact?: boolean;
 }
-
-const timeSlotLabels: Record<TimeSlot, string> = {
-  morning: "上午",
-  afternoon: "下午",
-  evening: "晚上",
-};
 
 export function TaskCard({
   task,
@@ -46,6 +41,7 @@ export function TaskCard({
   onDragStart,
   onDragEnd,
   draggable = true,
+  compact = true,
 }: TaskCardProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
@@ -54,6 +50,111 @@ export function TaskCard({
     setShowDeleteDialog(false);
   };
 
+  if (compact) {
+    // 紧凑模式 - 用于日历视图
+    return (
+      <>
+        <div
+          className={`group flex items-center gap-1.5 px-2 py-1 bg-muted/50 rounded cursor-grab active:cursor-grabbing hover:bg-muted transition-colors ${
+            task.status === "completed" ? "opacity-60" : ""
+          }`}
+          draggable={draggable}
+          onDragStart={(e) => onDragStart?.(e, task)}
+          onDragEnd={onDragEnd}
+        >
+          <GripVertical className="h-3 w-3 text-muted-foreground/50 shrink-0 opacity-0 group-hover:opacity-100" />
+
+          <span
+            className={`text-xs truncate flex-1 ${
+              task.status === "completed" ? "line-through text-muted-foreground" : ""
+            }`}
+          >
+            {task.title}
+          </span>
+
+          <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4 shrink-0">
+            {task.hours}h
+          </Badge>
+
+          {tag && (
+            <div
+              className="w-2 h-2 rounded-full shrink-0"
+              style={{ backgroundColor: tag.color }}
+              title={tag.name}
+            />
+          )}
+
+          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5"
+              onClick={(e) => {
+                e.stopPropagation();
+                onStatusChange(task.id, task.status === "completed" ? "pending" : "completed");
+              }}
+            >
+              {task.status === "completed" ? (
+                <X className="h-3 w-3" />
+              ) : (
+                <Check className="h-3 w-3" />
+              )}
+            </Button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={(e) => e.stopPropagation()}>
+                  <MoreVertical className="h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[100px]">
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit(task);
+                  }}
+                >
+                  <Pencil className="h-3 w-3 mr-2" />
+                  编辑
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-destructive"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowDeleteDialog(true);
+                  }}
+                >
+                  <Trash2 className="h-3 w-3 mr-2" />
+                  删除
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>确认删除</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              确定要删除任务「{task.title}」吗？此操作无法撤销。
+            </p>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+                取消
+              </Button>
+              <Button variant="destructive" onClick={handleDelete}>
+                删除
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+  }
+
+  // 标准模式
   return (
     <>
       <Card
@@ -68,7 +169,7 @@ export function TaskCard({
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-start gap-1.5 flex-1 min-w-0">
               <GripVertical className="h-4 w-4 text-muted-foreground/50 mt-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-              
+
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <h4
