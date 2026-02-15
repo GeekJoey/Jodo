@@ -10,8 +10,8 @@ import { ChevronLeft, ChevronRight, Plus, Loader2 } from "lucide-react";
 import { TaskCard } from "@/components/TaskCard";
 import { TaskForm } from "@/components/TaskForm";
 import { TagManager } from "@/components/TagManager";
-
-import { Task, Tag, InsertTask, TimeSlot, TaskStatus } from "@/types";
+import { TaskPool } from "@/components/TaskPool";
+import { Task, Tag, InsertTask, TimeSlot, TaskStatus, DragData } from "@/types";
 
 const timeSlots: { key: TimeSlot; label: string; icon: string }[] = [
   { key: "morning", label: "上午", icon: "🌅" },
@@ -21,6 +21,7 @@ const timeSlots: { key: TimeSlot; label: string; icon: string }[] = [
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [unassignedTasks, setUnassignedTasks] = useState<Task[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -28,6 +29,8 @@ export default function Home() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [defaultTimeSlot, setDefaultTimeSlot] = useState<TimeSlot>("morning");
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [defaultUnassigned, setDefaultUnassigned] = useState(false);
+  const [draggedTask, setDraggedTask] = useState<Task | null>(null);
 
   // 获取一周的日期
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
@@ -37,7 +40,7 @@ export default function Home() {
   const startDate = format(weekDays[0], "yyyy-MM-dd");
   const endDate = format(weekDays[6], "yyyy-MM-dd");
 
-  // 加载任务
+  // 加载已分配任务
   const loadTasks = useCallback(async () => {
     try {
       const res = await fetch(`/api/tasks?start_date=${startDate}&end_date=${endDate}`);
@@ -55,6 +58,22 @@ export default function Home() {
     }
   }, [startDate, endDate]);
 
+  // 加载未分配任务
+  const loadUnassignedTasks = useCallback(async () => {
+    try {
+      const res = await fetch("/api/tasks?unassigned=true");
+      const data = await res.json();
+      const transformedTasks = (data.data || []).map((task: Record<string, unknown>) => ({
+        ...task,
+        hours: parseFloat(String(task.hours)) || 0,
+        status: task.status as TaskStatus,
+      }));
+      setUnassignedTasks(transformedTasks);
+    } catch (error) {
+      console.error("Failed to load unassigned tasks:", error);
+    }
+  }, []);
+
   // 加载标签
   const loadTags = useCallback(async () => {
     try {
@@ -69,11 +88,11 @@ export default function Home() {
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      await Promise.all([loadTasks(), loadTags()]);
+      await Promise.all([loadTasks(), loadUnassignedTasks(), loadTags()]);
       setLoading(false);
     };
     loadData();
-  }, [loadTasks, loadTags]);
+  }, [loadTasks, loadUnassignedTasks, loadTags]);
 
   // 创建任务
   const handleCreateTask = async (data: InsertTask) => {
@@ -84,7 +103,7 @@ export default function Home() {
         body: JSON.stringify(data),
       });
       if (res.ok) {
-        await loadTasks();
+        await Promise.all([loadTasks(), loadUnassignedTasks()]);
       }
     } catch (error) {
       console.error("Failed to create task:", error);
@@ -100,7 +119,7 @@ export default function Home() {
         body: JSON.stringify(data),
       });
       if (res.ok) {
-        await loadTasks();
+        await Promise.all([loadTasks(), loadUnassignedTasks()]);
       }
     } catch (error) {
       console.error("Failed to update task:", error);
@@ -112,7 +131,7 @@ export default function Home() {
     try {
       const res = await fetch(`/api/tasks/${taskId}`, { method: "DELETE" });
       if (res.ok) {
-        await loadTasks();
+        await Promise.all([loadTasks(), loadUnassignedTasks()]);
       }
     } catch (error) {
       console.error("Failed to delete task:", error);
@@ -128,10 +147,26 @@ export default function Home() {
         body: JSON.stringify({ status }),
       });
       if (res.ok) {
-        await loadTasks();
+        await Promise.all([loadTasks(), loadUnassignedTasks()]);
       }
     } catch (error) {
       console.error("Failed to update task status:", error);
+    }
+  };
+
+  // 分配任务到日期时段
+  const handleAssignTask = async (taskId: string, date: string, timeSlot: TimeSlot) => {
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date, timeSlot }),
+      });
+      if (res.ok) {
+        await Promise.all([loadTasks(), loadUnassignedTasks()]);
+      }
+    } catch (error) {
+      console.error("Failed to assign task:", error);
     }
   };
 
@@ -179,19 +214,55 @@ export default function Home() {
     }
   };
 
-  // 打开新建任务表单
+  // 拖拽开始
+  const handleDragStart = (e: React.DragEvent, task: Task) => {
+    setDraggedTask(task);
+    const dragData: DragData = { taskId: task.id, type: "task" };
+    e.dataTransfer.setData("application/json", JSON.stringify(dragData));
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  // 拖拽结束
+  const handleDragEnd = () => {
+    setDraggedTask(null);
+  };
+
+  // 拖拽经过
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  // 放置任务
+  const handleDrop = (e: React.DragEvent, date: string, timeSlot: TimeSlot) => {
+    e.preventDefault();
+    if (draggedTask) {
+      handleAssignTask(draggedTask.id, date, timeSlot);
+    }
+  };
+
+  // 打开新建任务表单（已分配）
   const openNewTaskForm = (date: string, timeSlot: TimeSlot) => {
     setSelectedDate(date);
     setDefaultTimeSlot(timeSlot);
     setEditingTask(null);
+    setDefaultUnassigned(false);
+    setShowTaskForm(true);
+  };
+
+  // 打开新建任务表单（未分配）
+  const openNewUnassignedTaskForm = () => {
+    setEditingTask(null);
+    setDefaultUnassigned(true);
     setShowTaskForm(true);
   };
 
   // 打开编辑任务表单
   const openEditTaskForm = (task: Task) => {
     setEditingTask(task);
-    setSelectedDate(task.date);
-    setDefaultTimeSlot(task.timeSlot);
+    setSelectedDate(task.date || format(new Date(), "yyyy-MM-dd"));
+    setDefaultTimeSlot(task.timeSlot || "morning");
+    setDefaultUnassigned(task.date === null);
     setShowTaskForm(true);
   };
 
@@ -229,7 +300,7 @@ export default function Home() {
           <div>
             <h1 className="text-2xl font-bold">任务管理</h1>
             <p className="text-sm text-muted-foreground">
-              按日历规划你的一天，上午、下午、晚上三个时段
+              按日历规划你的一天，拖拽待办事项进行分配
             </p>
           </div>
           <TagManager
@@ -239,6 +310,17 @@ export default function Home() {
             onDelete={handleDeleteTag}
           />
         </div>
+
+        {/* 待办事项池 */}
+        <TaskPool
+          tasks={unassignedTasks}
+          tags={tags}
+          onEdit={openEditTaskForm}
+          onDelete={handleDeleteTask}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onAddTask={openNewUnassignedTaskForm}
+        />
 
         {/* 周导航 */}
         <div className="flex items-center justify-between mb-4">
@@ -292,9 +374,17 @@ export default function Home() {
                   {timeSlots.map((slot) => {
                     const slotTasks = getTasksByDateAndSlot(dateStr, slot.key);
                     const totalHours = getTotalHours(dateStr, slot.key);
+                    const isDropTarget = draggedTask !== null;
 
                     return (
-                      <div key={slot.key} className="space-y-2">
+                      <div
+                        key={slot.key}
+                        className={`space-y-2 p-1 -m-1 rounded transition-colors ${
+                          isDropTarget ? "bg-muted/50" : ""
+                        }`}
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, dateStr, slot.key)}
+                      >
                         <div className="flex items-center justify-between px-1">
                           <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                             <span>{slot.icon}</span>
@@ -317,7 +407,7 @@ export default function Home() {
                           </div>
                         </div>
 
-                        <div className="space-y-1.5">
+                        <div className="space-y-1.5 min-h-[60px]">
                           {slotTasks.map((task) => (
                             <TaskCard
                               key={task.id}
@@ -326,11 +416,13 @@ export default function Home() {
                               onEdit={openEditTaskForm}
                               onDelete={handleDeleteTask}
                               onStatusChange={handleStatusChange}
+                              onDragStart={handleDragStart}
+                              onDragEnd={handleDragEnd}
                             />
                           ))}
                           {slotTasks.length === 0 && (
-                            <div className="text-[10px] text-muted-foreground/50 text-center py-2">
-                              暂无任务
+                            <div className="text-[10px] text-muted-foreground/50 text-center py-4 border border-dashed border-muted-foreground/20 rounded">
+                              {isDropTarget ? "放置到此处" : "暂无任务"}
                             </div>
                           )}
                         </div>
@@ -351,6 +443,7 @@ export default function Home() {
           tags={tags}
           defaultDate={selectedDate}
           defaultTimeSlot={defaultTimeSlot}
+          defaultUnassigned={defaultUnassigned}
           onSubmit={(data) => {
             if (editingTask) {
               handleUpdateTask(editingTask, data);

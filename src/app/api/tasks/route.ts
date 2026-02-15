@@ -6,8 +6,8 @@ import { z } from "zod";
 const createTaskSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().optional(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  timeSlot: z.enum(["morning", "afternoon", "evening"]),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  timeSlot: z.enum(["morning", "afternoon", "evening"]).optional().nullable(),
   hours: z.union([z.number(), z.string()]).transform(v => String(v)),
   tagId: z.string().optional().nullable(),
 });
@@ -19,11 +19,16 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get("start_date");
     const endDate = searchParams.get("end_date");
+    const unassigned = searchParams.get("unassigned");
 
     let query = client.from("tasks").select("*");
 
-    if (startDate && endDate) {
-      query = query.gte("date", startDate).lte("date", endDate);
+    if (unassigned === "true") {
+      // 获取未分配的任务（date 为 null）
+      query = query.is("date", null);
+    } else if (startDate && endDate) {
+      // 获取日期范围内的任务（date 不为 null）
+      query = query.not("date", "is", null).gte("date", startDate).lte("date", endDate);
     }
 
     const { data, error } = await query.order("created_at", { ascending: true });
@@ -63,8 +68,8 @@ export async function POST(request: NextRequest) {
     const dbData = {
       title: validatedData.title,
       description: validatedData.description || null,
-      date: validatedData.date,
-      time_slot: validatedData.timeSlot,
+      date: validatedData.date || null,
+      time_slot: validatedData.timeSlot || null,
       hours: validatedData.hours,
       tag_id: validatedData.tagId || null,
       status: "pending",

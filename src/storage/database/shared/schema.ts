@@ -36,8 +36,8 @@ export const tasks = pgTable(
       .default(sql`gen_random_uuid()`),
     title: varchar("title", { length: 200 }).notNull(),
     description: text("description"),
-    date: varchar("date", { length: 10 }).notNull(), // 格式: YYYY-MM-DD
-    timeSlot: varchar("time_slot", { length: 20 }).notNull(), // morning, afternoon, evening
+    date: varchar("date", { length: 10 }), // 格式: YYYY-MM-DD，null 表示未分配
+    timeSlot: varchar("time_slot", { length: 20 }), // morning, afternoon, evening，null 表示未分配
     hours: numeric("hours", { precision: 3, scale: 1 }).notNull().default("1"), // 预估小时数，支持0.5
     tagId: varchar("tag_id", { length: 36 }),
     status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, completed

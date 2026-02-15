@@ -14,8 +14,8 @@ export interface Task {
   id: string;
   title: string;
   description: string | null;
-  date: string;
-  timeSlot: TimeSlot;
+  date: string | null; // null 表示未分配到日历
+  timeSlot: TimeSlot | null; // null 表示未分配到日历
   hours: number;
   tagId: string | null;
   status: TaskStatus;
@@ -26,8 +26,14 @@ export interface Task {
 export interface InsertTask {
   title: string;
   description?: string;
-  date: string;
-  timeSlot: TimeSlot;
+  date?: string | null;
+  timeSlot?: TimeSlot | null;
   hours: number;
   tagId?: string;
+}
+
+// 拖拽数据类型
+export interface DragData {
+  taskId: string;
+  type: "task";
 }

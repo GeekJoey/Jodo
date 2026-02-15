@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tag, TimeSlot, InsertTask, Task } from "@/types";
 
 interface TaskFormProps {
@@ -29,6 +29,7 @@ interface TaskFormProps {
   tags: Tag[];
   defaultDate: string;
   defaultTimeSlot: TimeSlot;
+  defaultUnassigned?: boolean;
   onSubmit: (data: InsertTask) => void;
 }
 
@@ -47,6 +48,7 @@ export function TaskForm({
   tags,
   defaultDate,
   defaultTimeSlot,
+  defaultUnassigned = false,
   onSubmit,
 }: TaskFormProps) {
   const [title, setTitle] = useState("");
@@ -55,15 +57,17 @@ export function TaskForm({
   const [timeSlot, setTimeSlot] = useState<TimeSlot>(defaultTimeSlot);
   const [hours, setHours] = useState<number>(1);
   const [tagId, setTagId] = useState<string>("");
+  const [unassigned, setUnassigned] = useState(defaultUnassigned);
 
   useEffect(() => {
     if (task) {
       setTitle(task.title);
       setDescription(task.description || "");
-      setDate(task.date);
-      setTimeSlot(task.timeSlot);
+      setDate(task.date || defaultDate);
+      setTimeSlot(task.timeSlot || defaultTimeSlot);
       setHours(task.hours);
       setTagId(task.tagId || "");
+      setUnassigned(task.date === null);
     } else {
       setTitle("");
       setDescription("");
@@ -71,16 +75,17 @@ export function TaskForm({
       setTimeSlot(defaultTimeSlot);
       setHours(1);
       setTagId("");
+      setUnassigned(defaultUnassigned);
     }
-  }, [task, defaultDate, defaultTimeSlot, open]);
+  }, [task, defaultDate, defaultTimeSlot, defaultUnassigned, open]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit({
       title,
       description: description || undefined,
-      date,
-      timeSlot,
+      date: unassigned ? null : date,
+      timeSlot: unassigned ? null : timeSlot,
       hours,
       tagId: tagId || undefined,
     });
@@ -116,34 +121,47 @@ export function TaskForm({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="date">日期 *</Label>
-              <Input
-                id="date"
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>时间段 *</Label>
-              <Select value={timeSlot} onValueChange={(v) => setTimeSlot(v as TimeSlot)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {timeSlotOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="unassigned"
+              checked={unassigned}
+              onCheckedChange={(checked) => setUnassigned(checked as boolean)}
+            />
+            <Label htmlFor="unassigned" className="text-sm cursor-pointer">
+              添加到待办事项池（稍后分配日期）
+            </Label>
           </div>
+
+          {!unassigned && (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="date">日期 *</Label>
+                <Input
+                  id="date"
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>时间段 *</Label>
+                <Select value={timeSlot} onValueChange={(v) => setTimeSlot(v as TimeSlot)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {timeSlotOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">

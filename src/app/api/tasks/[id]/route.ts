@@ -6,8 +6,8 @@ import { z } from "zod";
 const updateTaskSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().optional().nullable(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  timeSlot: z.enum(["morning", "afternoon", "evening"]).optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  timeSlot: z.enum(["morning", "afternoon", "evening"]).optional().nullable(),
   hours: z.union([z.number(), z.string()]).transform(v => String(v)).optional(),
   tagId: z.string().optional().nullable(),
   status: z.enum(["pending", "completed"]).optional(),
