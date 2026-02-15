@@ -1,15 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -17,8 +11,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Clock, MoreVertical, Pencil, Trash2, GripVertical, Plus } from "lucide-react";
-import { Task, Tag, TimeSlot, TaskStatus } from "@/types";
+import { Clock, Pencil, Trash2, GripVertical, Plus } from "lucide-react";
+import { Task, Tag } from "@/types";
 
 interface TaskPoolProps {
   tasks: Task[];
@@ -33,6 +27,16 @@ interface TaskPoolProps {
 export function TaskPool({ tasks, tags, onEdit, onDelete, onDragStart, onDragEnd, onAddTask }: TaskPoolProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   const handleDelete = () => {
     if (taskToDelete) {
@@ -62,7 +66,7 @@ export function TaskPool({ tasks, tags, onEdit, onDelete, onDragStart, onDragEnd
             添加待办
           </Button>
         </div>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground hidden md:block">
           拖拽任务到下方日历的日期和时段进行分配
         </p>
       </CardHeader>
@@ -73,22 +77,26 @@ export function TaskPool({ tasks, tags, onEdit, onDelete, onDragStart, onDragEnd
             <p className="text-xs mt-1">点击上方「添加待办」创建新任务</p>
           </div>
         ) : (
-          <div className="flex flex-wrap gap-2">
+          <div className={`flex ${isMobile ? "flex-col" : "flex-wrap"} gap-2`}>
             {tasks.map((task) => {
               const tag = getTagById(task.tagId);
               return (
                 <div
                   key={task.id}
-                  draggable
-                  onDragStart={(e) => onDragStart(e, task)}
+                  draggable={!isMobile}
+                  onDragStart={(e) => !isMobile && onDragStart(e, task)}
                   onDragEnd={onDragEnd}
-                  className="group flex items-center gap-2 px-3 py-2 bg-muted/50 rounded-lg cursor-grab active:cursor-grabbing hover:bg-muted transition-colors border border-transparent hover:border-border"
+                  className={`group flex items-center gap-2 px-3 py-2 bg-muted/50 rounded-lg transition-colors border border-transparent hover:border-border ${
+                    isMobile ? "" : "cursor-grab active:cursor-grabbing hover:bg-muted"
+                  }`}
                 >
-                  <GripVertical className="h-4 w-4 text-muted-foreground opacity-50 group-hover:opacity-100" />
-                  
+                  {!isMobile && (
+                    <GripVertical className="h-4 w-4 text-muted-foreground opacity-50 group-hover:opacity-100" />
+                  )}
+
                   <div className="flex items-center gap-2 flex-1 min-w-0">
                     <span className="font-medium text-sm truncate">{task.title}</span>
-                    
+
                     <Badge variant="outline" className="text-xs shrink-0">
                       <Clock className="h-3 w-3 mr-1" />
                       {task.hours}h
@@ -104,30 +112,30 @@ export function TaskPool({ tasks, tags, onEdit, onDelete, onDragStart, onDragEnd
                     )}
                   </div>
 
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className={`flex items-center gap-1 ${isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100"} transition-opacity`}>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-6 w-6"
+                      className="h-7 w-7"
                       onClick={(e) => {
                         e.stopPropagation();
                         onEdit(task);
                       }}
                     >
-                      <Pencil className="h-3 w-3" />
+                      <Pencil className="h-3.5 w-3.5" />
                     </Button>
 
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-6 w-6 text-destructive"
+                      className="h-7 w-7 text-destructive"
                       onClick={(e) => {
                         e.stopPropagation();
                         setTaskToDelete(task);
                         setShowDeleteDialog(true);
                       }}
                     >
-                      <Trash2 className="h-3 w-3" />
+                      <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 </div>
