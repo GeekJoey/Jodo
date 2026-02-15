@@ -41,6 +41,9 @@ const timeSlotOptions: { value: TimeSlot; label: string }[] = [
 
 const hourOptions = [0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 7, 8];
 
+// 特殊值表示"无标签"（空字符串不被 Select 组件允许）
+const NO_TAG_VALUE = "__no_tag__";
+
 export function TaskForm({
   open,
   onOpenChange,
@@ -56,7 +59,7 @@ export function TaskForm({
   const [date, setDate] = useState(defaultDate);
   const [timeSlot, setTimeSlot] = useState<TimeSlot>(defaultTimeSlot);
   const [hours, setHours] = useState<number>(1);
-  const [tagId, setTagId] = useState<string>("");
+  const [tagId, setTagId] = useState<string>(NO_TAG_VALUE);
   const [unassigned, setUnassigned] = useState(defaultUnassigned);
 
   useEffect(() => {
@@ -66,7 +69,7 @@ export function TaskForm({
       setDate(task.date || defaultDate);
       setTimeSlot(task.timeSlot || defaultTimeSlot);
       setHours(task.hours);
-      setTagId(task.tagId || "");
+      setTagId(task.tagId || NO_TAG_VALUE);
       setUnassigned(task.date === null);
     } else {
       setTitle("");
@@ -74,7 +77,7 @@ export function TaskForm({
       setDate(defaultDate);
       setTimeSlot(defaultTimeSlot);
       setHours(1);
-      setTagId("");
+      setTagId(NO_TAG_VALUE);
       setUnassigned(defaultUnassigned);
     }
   }, [task, defaultDate, defaultTimeSlot, defaultUnassigned, open]);
@@ -87,7 +90,7 @@ export function TaskForm({
       date: unassigned ? null : date,
       timeSlot: unassigned ? null : timeSlot,
       hours,
-      tagId: tagId || undefined,
+      tagId: tagId === NO_TAG_VALUE ? undefined : tagId,
     });
     onOpenChange(false);
   };
@@ -190,7 +193,7 @@ export function TaskForm({
                   <SelectValue placeholder="选择标签" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">无标签</SelectItem>
+                  <SelectItem value={NO_TAG_VALUE}>无标签</SelectItem>
                   {tags.map((tag) => (
                     <SelectItem key={tag.id} value={tag.id}>
                       <div className="flex items-center gap-2">
