@@ -17,8 +17,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Clock, MoreVertical, Pencil, Trash2, Check, X, GripVertical } from "lucide-react";
-import { Task, Tag, TimeSlot, TaskStatus } from "@/types";
+import { Clock, MoreVertical, Pencil, Trash2, Check, X, GripVertical, AlertTriangle } from "lucide-react";
+import { Task, Tag, TimeSlot, TaskStatus, TaskPriority } from "@/types";
 
 interface TaskCardProps {
   task: Task;
@@ -31,6 +31,11 @@ interface TaskCardProps {
   draggable?: boolean;
   compact?: boolean;
 }
+
+const priorityColors: Record<TaskPriority, string> = {
+  urgent: "#ef4444",
+  normal: "#6b7280",
+};
 
 export function TaskCard({
   task,
@@ -57,12 +62,16 @@ export function TaskCard({
         <div
           className={`group flex items-center gap-1.5 px-2 py-1 bg-muted/50 rounded cursor-grab active:cursor-grabbing hover:bg-muted transition-colors ${
             task.status === "completed" ? "opacity-60" : ""
-          }`}
+          } ${task.priority === "urgent" ? "border-l-2 border-red-500" : ""}`}
           draggable={draggable}
           onDragStart={(e) => onDragStart?.(e, task)}
           onDragEnd={onDragEnd}
         >
           <GripVertical className="h-3 w-3 text-muted-foreground/50 shrink-0 opacity-0 group-hover:opacity-100" />
+
+          {task.priority === "urgent" && (
+            <AlertTriangle className="h-3 w-3 text-red-500 shrink-0" />
+          )}
 
           <span
             className={`text-xs truncate flex-1 ${
@@ -160,7 +169,7 @@ export function TaskCard({
       <Card
         className={`group relative transition-all hover:shadow-md cursor-grab active:cursor-grabbing ${
           task.status === "completed" ? "opacity-60" : ""
-        }`}
+        } ${task.priority === "urgent" ? "border-l-4 border-red-500" : ""}`}
         draggable={draggable}
         onDragStart={(e) => onDragStart?.(e, task)}
         onDragEnd={onDragEnd}
@@ -172,6 +181,12 @@ export function TaskCard({
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
+                  {task.priority === "urgent" && (
+                    <Badge variant="destructive" className="text-xs">
+                      <AlertTriangle className="h-3 w-3 mr-1" />
+                      紧急
+                    </Badge>
+                  )}
                   <h4
                     className={`font-medium text-sm truncate ${
                       task.status === "completed" ? "line-through text-muted-foreground" : ""

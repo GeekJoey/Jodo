@@ -10,6 +10,7 @@ const updateTaskSchema = z.object({
   timeSlot: z.enum(["morning", "afternoon", "evening"]).optional().nullable(),
   hours: z.union([z.number(), z.string()]).transform(v => String(v)).optional(),
   tagId: z.string().optional().nullable(),
+  priority: z.enum(["urgent", "normal"]).optional(),
   status: z.enum(["pending", "completed"]).optional(),
 });
 
@@ -78,6 +79,7 @@ export async function PUT(
     if (validatedData.timeSlot !== undefined) dbData.time_slot = validatedData.timeSlot;
     if (validatedData.hours !== undefined) dbData.hours = validatedData.hours;
     if (validatedData.tagId !== undefined) dbData.tag_id = validatedData.tagId;
+    if (validatedData.priority !== undefined) dbData.priority = validatedData.priority;
     if (validatedData.status !== undefined) dbData.status = validatedData.status;
 
     const { data, error } = await client

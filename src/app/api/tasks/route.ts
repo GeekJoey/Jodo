@@ -10,6 +10,7 @@ const createTaskSchema = z.object({
   timeSlot: z.enum(["morning", "afternoon", "evening"]).optional().nullable(),
   hours: z.union([z.number(), z.string()]).transform(v => String(v)),
   tagId: z.string().optional().nullable(),
+  priority: z.enum(["urgent", "normal"]).optional().default("normal"),
 });
 
 // GET /api/tasks - 获取任务列表
@@ -72,6 +73,7 @@ export async function POST(request: NextRequest) {
       time_slot: validatedData.timeSlot || null,
       hours: validatedData.hours,
       tag_id: validatedData.tagId || null,
+      priority: validatedData.priority,
       status: "pending",
     };
 

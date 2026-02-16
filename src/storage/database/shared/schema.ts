@@ -40,6 +40,7 @@ export const tasks = pgTable(
     timeSlot: varchar("time_slot", { length: 20 }), // morning, afternoon, evening，null 表示未分配
     hours: numeric("hours", { precision: 3, scale: 1 }).notNull().default("1"), // 预估小时数，支持0.5
     tagId: varchar("tag_id", { length: 36 }),
+    priority: varchar("priority", { length: 20 }).notNull().default("normal"), // urgent, normal
     status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, completed
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
@@ -50,6 +51,7 @@ export const tasks = pgTable(
     index("tasks_date_idx").on(table.date),
     index("tasks_time_slot_idx").on(table.timeSlot),
     index("tasks_status_idx").on(table.status),
+    index("tasks_priority_idx").on(table.priority),
   ]
 );
 
@@ -79,6 +81,7 @@ export const insertTaskSchema = createCoercedInsertSchema(tasks).pick({
   timeSlot: true,
   hours: true,
   tagId: true,
+  priority: true,
 });
 
 export const updateTaskSchema = createCoercedInsertSchema(tasks)
@@ -89,6 +92,7 @@ export const updateTaskSchema = createCoercedInsertSchema(tasks)
     timeSlot: true,
     hours: true,
     tagId: true,
+    priority: true,
     status: true,
   })
   .partial();
@@ -106,3 +110,6 @@ export type TimeSlot = "morning" | "afternoon" | "evening";
 
 // 任务状态类型
 export type TaskStatus = "pending" | "completed";
+
+// 任务优先级类型
+export type TaskPriority = "urgent" | "normal";

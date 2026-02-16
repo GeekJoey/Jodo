@@ -13,8 +13,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Clock, Pencil, Trash2, Plus, Check, X, GripVertical, ChevronDown, ChevronRight } from "lucide-react";
-import { Task, Tag, TimeSlot, TaskStatus } from "@/types";
+import { Clock, Pencil, Trash2, Plus, Check, X, GripVertical, ChevronDown, ChevronRight, AlertTriangle } from "lucide-react";
+import { Task, Tag, TimeSlot, TaskStatus, TaskPriority } from "@/types";
 
 const timeSlots: { key: TimeSlot; label: string; icon: string }[] = [
   { key: "morning", label: "上午", icon: "🌅" },
@@ -271,9 +271,13 @@ export function TaskListView({
                                       onDragEnd={onDragEnd}
                                       className={`group flex items-center gap-1.5 px-2 py-1 bg-muted/50 rounded cursor-grab active:cursor-grabbing hover:bg-muted transition-colors ${
                                         task.status === "completed" ? "opacity-60" : ""
-                                      }`}
+                                      } ${task.priority === "urgent" ? "border-l-2 border-red-500" : ""}`}
                                     >
                                       <GripVertical className="h-3 w-3 text-muted-foreground/50 opacity-0 group-hover:opacity-100 shrink-0" />
+
+                                      {task.priority === "urgent" && (
+                                        <AlertTriangle className="h-3 w-3 text-red-500 shrink-0" />
+                                      )}
 
                                       <span
                                         className={`text-xs truncate flex-1 ${

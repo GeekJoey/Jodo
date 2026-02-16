@@ -14,7 +14,7 @@ import { TaskForm } from "@/components/TaskForm";
 import { TagManager } from "@/components/TagManager";
 import { TaskPool } from "@/components/TaskPool";
 import { TaskListView } from "@/components/TaskListView";
-import { Task, Tag, InsertTask, TimeSlot, TaskStatus } from "@/types";
+import { Task, Tag, InsertTask, TimeSlot, TaskStatus, TaskPriority } from "@/types";
 
 const timeSlots: { key: TimeSlot; label: string; icon: string }[] = [
   { key: "morning", label: "上午", icon: "🌅" },
@@ -36,6 +36,7 @@ export default function Home() {
   const [defaultTimeSlot, setDefaultTimeSlot] = useState<TimeSlot>("morning");
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [defaultUnassigned, setDefaultUnassigned] = useState(false);
+  const [defaultPriority, setDefaultPriority] = useState<TaskPriority>("normal");
   const [draggedTask, setDraggedTask] = useState<Task | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isMobile, setIsMobile] = useState(false);
@@ -76,6 +77,7 @@ export default function Home() {
         hours: parseFloat(String(task.hours)) || 0,
         timeSlot: task.timeSlot as TimeSlot,
         status: task.status as TaskStatus,
+        priority: (task.priority || "normal") as TaskPriority,
       }));
       setTasks(transformedTasks);
     } catch (error) {
@@ -92,6 +94,7 @@ export default function Home() {
         ...task,
         hours: parseFloat(String(task.hours)) || 0,
         status: task.status as TaskStatus,
+        priority: (task.priority || "normal") as TaskPriority,
       }));
       setUnassignedTasks(transformedTasks);
     } catch (error) {
@@ -199,12 +202,16 @@ export default function Home() {
   };
 
   // 取消分配（移回待办池）
-  const handleUnassignTask = async (taskId: string) => {
+  const handleUnassignTask = async (taskId: string, priority?: TaskPriority) => {
     try {
+      const updateData: Record<string, unknown> = { date: null, timeSlot: null };
+      if (priority) {
+        updateData.priority = priority;
+      }
       const res = await fetch(`/api/tasks/${taskId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: null, timeSlot: null }),
+        body: JSON.stringify(updateData),
       });
       if (res.ok) {
         await Promise.all([loadTasks(), loadUnassignedTasks()]);
@@ -305,13 +312,15 @@ export default function Home() {
     setDefaultTimeSlot(timeSlot);
     setEditingTask(null);
     setDefaultUnassigned(false);
+    setDefaultPriority("normal");
     setShowTaskForm(true);
   };
 
-  // 打开新建任务表单（未分配）
-  const openNewUnassignedTaskForm = () => {
+  // 打开新建任务表单（未分配，指定优先级）
+  const openNewUnassignedTaskForm = (priority: TaskPriority = "normal") => {
     setEditingTask(null);
     setDefaultUnassigned(true);
+    setDefaultPriority(priority);
     setShowTaskForm(true);
   };
 
@@ -321,6 +330,7 @@ export default function Home() {
     setSelectedDate(task.date || format(new Date(), "yyyy-MM-dd"));
     setDefaultTimeSlot(task.timeSlot || "morning");
     setDefaultUnassigned(task.date === null);
+    setDefaultPriority(task.priority || "normal");
     setShowTaskForm(true);
     setSelectedTask(null);
   };
@@ -439,71 +449,16 @@ export default function Home() {
 
             {/* 待办事项池 */}
             <TabsContent value="pool" className="mt-0">
-              <Card>
-                <CardHeader className="pb-2 pt-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">待办事项</CardTitle>
-                    <Button variant="outline" size="sm" onClick={openNewUnassignedTaskForm}>
-                      <Plus className="h-4 w-4 mr-1" />
-                      添加
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-2">
-                  {unassignedTasks.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Inbox className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">暂无待办事项</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {unassignedTasks.map((task) => {
-                        const tag = getTagById(task.tagId);
-                        const isSelected = selectedTask?.id === task.id;
-                        return (
-                          <div
-                            key={task.id}
-                            onClick={() => handleTaskClick(task)}
-                            className={`flex items-center gap-2 p-3 rounded-lg cursor-pointer transition-colors ${
-                              isSelected
-                                ? "bg-primary/10 border-2 border-primary"
-                                : "bg-muted/50 border-2 border-transparent hover:bg-muted"
-                            }`}
-                          >
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium text-sm truncate">{task.title}</div>
-                              <div className="flex items-center gap-2 mt-1">
-                                <Badge variant="outline" className="text-xs">
-                                  {task.hours}h
-                                </Badge>
-                                {tag && (
-                                  <Badge
-                                    style={{ backgroundColor: tag.color, color: "#fff" }}
-                                    className="text-xs"
-                                  >
-                                    {tag.name}
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openEditTaskForm(task);
-                              }}
-                            >
-                              <Plus className="h-4 w-4 rotate-45" />
-                            </Button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              <TaskPool
+                tasks={unassignedTasks}
+                tags={tags}
+                onEdit={openEditTaskForm}
+                onDelete={handleDeleteTask}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                onAddTask={openNewUnassignedTaskForm}
+                onDropToPool={handleUnassignTask}
+              />
             </TabsContent>
 
             {/* 日历视图 */}
@@ -578,7 +533,7 @@ export default function Home() {
                                       isSelected
                                         ? "bg-primary/10 border border-primary"
                                         : "bg-muted/50 hover:bg-muted"
-                                    }`}
+                                    } ${task.priority === "urgent" ? "border-l-2 border-red-500" : ""}`}
                                   >
                                     <span className={`text-xs truncate flex-1 ${task.status === "completed" ? "line-through text-muted-foreground" : ""}`}>
                                       {task.title}
@@ -653,6 +608,7 @@ export default function Home() {
           defaultDate={selectedDate}
           defaultTimeSlot={defaultTimeSlot}
           defaultUnassigned={defaultUnassigned}
+          defaultPriority={defaultPriority}
           onSubmit={(data) => {
             if (editingTask) {
               handleUpdateTask(editingTask, data);
@@ -828,6 +784,7 @@ export default function Home() {
           defaultDate={selectedDate}
           defaultTimeSlot={defaultTimeSlot}
           defaultUnassigned={defaultUnassigned}
+          defaultPriority={defaultPriority}
           onSubmit={(data) => {
             if (editingTask) {
               handleUpdateTask(editingTask, data);

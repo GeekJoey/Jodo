@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Tag, TimeSlot, InsertTask, Task } from "@/types";
+import { Tag, TimeSlot, InsertTask, Task, TaskPriority } from "@/types";
 
 interface TaskFormProps {
   open: boolean;
@@ -30,6 +30,7 @@ interface TaskFormProps {
   defaultDate: string;
   defaultTimeSlot: TimeSlot;
   defaultUnassigned?: boolean;
+  defaultPriority?: TaskPriority;
   onSubmit: (data: InsertTask) => void;
 }
 
@@ -37,6 +38,11 @@ const timeSlotOptions: { value: TimeSlot; label: string }[] = [
   { value: "morning", label: "上午" },
   { value: "afternoon", label: "下午" },
   { value: "evening", label: "晚上" },
+];
+
+const priorityOptions: { value: TaskPriority; label: string; color: string }[] = [
+  { value: "urgent", label: "紧急", color: "#ef4444" },
+  { value: "normal", label: "普通", color: "#6b7280" },
 ];
 
 const hourOptions = [0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 7, 8];
@@ -52,6 +58,7 @@ export function TaskForm({
   defaultDate,
   defaultTimeSlot,
   defaultUnassigned = false,
+  defaultPriority = "normal",
   onSubmit,
 }: TaskFormProps) {
   const [title, setTitle] = useState("");
@@ -60,6 +67,7 @@ export function TaskForm({
   const [timeSlot, setTimeSlot] = useState<TimeSlot>(defaultTimeSlot);
   const [hours, setHours] = useState<number>(1);
   const [tagId, setTagId] = useState<string>(NO_TAG_VALUE);
+  const [priority, setPriority] = useState<TaskPriority>(defaultPriority);
   const [unassigned, setUnassigned] = useState(defaultUnassigned);
 
   useEffect(() => {
@@ -70,6 +78,7 @@ export function TaskForm({
       setTimeSlot(task.timeSlot || defaultTimeSlot);
       setHours(task.hours);
       setTagId(task.tagId || NO_TAG_VALUE);
+      setPriority(task.priority || "normal");
       setUnassigned(task.date === null);
     } else {
       setTitle("");
@@ -78,9 +87,10 @@ export function TaskForm({
       setTimeSlot(defaultTimeSlot);
       setHours(1);
       setTagId(NO_TAG_VALUE);
+      setPriority(defaultPriority);
       setUnassigned(defaultUnassigned);
     }
-  }, [task, defaultDate, defaultTimeSlot, defaultUnassigned, open]);
+  }, [task, defaultDate, defaultTimeSlot, defaultUnassigned, defaultPriority, open]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,6 +101,7 @@ export function TaskForm({
       timeSlot: unassigned ? null : timeSlot,
       hours,
       tagId: tagId === NO_TAG_VALUE ? undefined : tagId,
+      priority,
     });
     onOpenChange(false);
   };
@@ -166,7 +177,32 @@ export function TaskForm({
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label>优先级 *</Label>
+              <Select
+                value={priority}
+                onValueChange={(v) => setPriority(v as TaskPriority)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {priorityOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-2 h-2 rounded-full"
+                          style={{ backgroundColor: option.color }}
+                        />
+                        {option.label}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="space-y-2">
               <Label>预估时长 *</Label>
               <Select

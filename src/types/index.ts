@@ -2,6 +2,7 @@
 
 export type TimeSlot = "morning" | "afternoon" | "evening";
 export type TaskStatus = "pending" | "completed";
+export type TaskPriority = "urgent" | "normal";
 
 export interface Tag {
   id: string;
@@ -18,6 +19,7 @@ export interface Task {
   timeSlot: TimeSlot | null; // null 表示未分配到日历
   hours: number;
   tagId: string | null;
+  priority: TaskPriority;
   status: TaskStatus;
   createdAt: string;
   updatedAt: string | null;
@@ -30,6 +32,7 @@ export interface InsertTask {
   timeSlot?: TimeSlot | null;
   hours: number;
   tagId?: string;
+  priority?: TaskPriority;
 }
 
 // 拖拽数据类型
