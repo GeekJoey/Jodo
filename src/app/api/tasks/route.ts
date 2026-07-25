@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseClient } from "@/storage/database/supabase-client";
+import { requireSupabaseUser } from "@/storage/database/supabase-route";
 import { z } from "zod";
 
 // 定义任务创建的 schema
@@ -16,13 +16,19 @@ const createTaskSchema = z.object({
 // GET /api/tasks - 获取任务列表
 export async function GET(request: NextRequest) {
   try {
-    const client = getSupabaseClient();
+    const { supabase, user } = await requireSupabaseUser(request);
+    if (!supabase || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get("start_date");
     const endDate = searchParams.get("end_date");
     const unassigned = searchParams.get("unassigned");
 
-    let query = client.from("tasks").select("*");
+    let query = supabase
+      .from("tasks")
+      .select("id,title,description,date,time_slot,hours,tag_id,priority,status,created_at,updated_at")
+      .eq("user_id", user.id);
 
     if (unassigned === "true") {
       // 获取未分配的任务（date 为 null）
@@ -60,7 +66,10 @@ export async function GET(request: NextRequest) {
 // POST /api/tasks - 创建任务
 export async function POST(request: NextRequest) {
   try {
-    const client = getSupabaseClient();
+    const { supabase, user } = await requireSupabaseUser(request);
+    if (!supabase || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const body = await request.json();
 
     const validatedData = createTaskSchema.parse(body);
@@ -75,12 +84,13 @@ export async function POST(request: NextRequest) {
       tag_id: validatedData.tagId || null,
       priority: validatedData.priority,
       status: "pending",
+      user_id: user.id,
     };
 
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from("tasks")
       .insert(dbData)
-      .select()
+      .select("id,title,description,date,time_slot,hours,tag_id,priority,status,created_at,updated_at")
       .single();
 
     if (error) {
