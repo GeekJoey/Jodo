@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Mail, LogIn, UserPlus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,16 @@ import { createSupabaseBrowserClient } from "@/storage/database/supabase-browser
 type Mode = "login" | "signup";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginSkeleton />}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,6 +41,20 @@ export default function LoginPage() {
     });
   }, [router]);
 
+  useEffect(() => {
+    const errorCode = searchParams.get("error_code");
+    const errorDescription = searchParams.get("error_description");
+
+    if (errorCode === "otp_expired") {
+      setMessage("验证链接已过期，请重新注册或重新发送验证邮件。");
+      return;
+    }
+
+    if (errorDescription) {
+      setMessage(decodeURIComponent(errorDescription));
+    }
+  }, [searchParams]);
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setSubmitting(true);
@@ -44,7 +67,12 @@ export default function LoginPage() {
       const result =
         mode === "login"
           ? await supabase.auth.signInWithPassword(payload)
-          : await supabase.auth.signUp(payload);
+          : await supabase.auth.signUp({
+              ...payload,
+              options: {
+                emailRedirectTo: `${window.location.origin}/login`,
+              },
+            });
 
       if (result.error) {
         setMessage(result.error.message);
@@ -156,6 +184,14 @@ export default function LoginPage() {
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function LoginSkeleton() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-50">
+      <div className="h-10 w-10 animate-spin rounded-full border-2 border-slate-300 border-t-slate-950" />
     </div>
   );
 }
