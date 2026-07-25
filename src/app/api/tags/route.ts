@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseClient } from "@/storage/database/supabase-client";
+import { requireSupabaseUser } from "@/storage/database/supabase-route";
 import { insertTagSchema } from "@/storage/database/shared/schema";
 import { z } from "zod";
 
 // GET /api/tags - 获取所有标签
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const client = getSupabaseClient();
+    const { supabase, user } = await requireSupabaseUser(request);
+    if (!supabase || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from("tags")
-      .select("*")
+      .select("id,name,color,created_at")
+      .eq("user_id", user.id)
       .order("created_at", { ascending: true });
 
     if (error) {
@@ -30,15 +34,18 @@ export async function GET() {
 // POST /api/tags - 创建标签
 export async function POST(request: NextRequest) {
   try {
-    const client = getSupabaseClient();
+    const { supabase, user } = await requireSupabaseUser(request);
+    if (!supabase || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const body = await request.json();
 
     const validatedData = insertTagSchema.parse(body);
 
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from("tags")
-      .insert(validatedData)
-      .select()
+      .insert({ ...validatedData, user_id: user.id })
+      .select("id,name,color,created_at")
       .single();
 
     if (error) {
