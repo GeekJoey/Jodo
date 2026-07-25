@@ -174,6 +174,19 @@ pnpm add -D package-name
 
 项目已配置 `preinstall` 脚本，使用其他包管理器会报错。
 
+### 4. Supabase 连接
+
+默认情况下，项目会连接到当前配置的 Supabase 项目：
+
+- `https://bbmdviffgxarxuptfftp.supabase.co`
+
+如果你想改成别的 Supabase 项目，可以在运行环境里设置：
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+数据库结构定义在 [`supabase/jodo_schema.sql`](supabase/jodo_schema.sql)。
+
 ### 4. 样式开发
 
 **使用 Tailwind CSS v4**
