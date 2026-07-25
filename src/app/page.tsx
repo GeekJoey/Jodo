@@ -18,6 +18,7 @@ import { TaskListView } from "@/components/TaskListView";
 import { Task, Tag, InsertTask, TimeSlot, TaskStatus, TaskPriority } from "@/types";
 import { AuthShell } from "@/components/auth-shell";
 import { createSupabaseBrowserClient } from "@/storage/database/supabase-browser";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const timeSlots: { key: TimeSlot; label: string; icon: string }[] = [
   { key: "morning", label: "上午", icon: "🌅" },
@@ -335,9 +336,7 @@ export default function Home() {
 
   // 点击任务（移动端选择）
   const handleTaskClick = (task: Task) => {
-    if (isMobile) {
-      setSelectedTask(selectedTask?.id === task.id ? null : task);
-    }
+    setSelectedTask(selectedTask?.id === task.id ? null : task);
   };
 
   // 点击时段格子（移动端分配）
@@ -452,6 +451,7 @@ export default function Home() {
               <Button variant="outline" size="sm" onClick={handleSignOut}>
                 退出
               </Button>
+              <ThemeToggle />
               <TagManager
                 tags={tags}
                 onAdd={handleAddTag}
@@ -686,170 +686,325 @@ export default function Home() {
 
   // 桌面端视图
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto p-4 max-w-7xl">
-        {/* 头部 */}
-        <div className="flex items-center justify-between mb-4">
+    <div className="relative min-h-screen overflow-hidden bg-transparent px-4 py-5 sm:px-6 lg:px-8">
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(15,23,42,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.04)_1px,transparent_1px)] bg-[size:48px_48px] [mask-image:linear-gradient(180deg,black,transparent_90%)]" />
+      <div className="relative mx-auto flex min-h-screen max-w-7xl flex-col">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-full border border-border/70 bg-background/75 px-4 py-3 backdrop-blur">
           <div>
-            <h1 className="text-2xl font-bold">任务管理</h1>
-            <p className="text-sm text-muted-foreground">
-              拖拽待办事项到日历进行分配，或拖回待办池
+            <p className="text-sm font-medium text-muted-foreground">
+              {currentUser.email ?? "已登录"}
             </p>
+            <h1 className="font-serif text-2xl tracking-tight text-foreground sm:text-3xl">
+              Good morning, let’s make today count.
+            </h1>
           </div>
           <div className="flex items-center gap-2">
-            <div className="text-right">
-              <p className="text-xs text-muted-foreground">当前用户</p>
-              <p className="text-sm font-medium">
-                {currentUser.email ?? "已登录"}
-              </p>
-            </div>
-            <Button variant="outline" size="sm" onClick={handleSignOut}>
+            <Button variant="outline" size="sm" className="rounded-full" onClick={() => openNewUnassignedTaskForm("normal")}>
+              <Plus className="mr-1 h-4 w-4" />
+              Create task
+            </Button>
+            <ThemeToggle />
+            <Button variant="outline" size="sm" className="rounded-full" onClick={handleSignOut}>
               退出
             </Button>
-            <TagManager
-              tags={tags}
-              onAdd={handleAddTag}
-              onUpdate={handleUpdateTag}
-              onDelete={handleDeleteTag}
-            />
           </div>
         </div>
 
-        {/* 待办事项池 */}
-        <TaskPool
-          tasks={unassignedTasks}
-          tags={tags}
-          onEdit={openEditTaskForm}
-          onDelete={handleDeleteTask}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          onAddTask={openNewUnassignedTaskForm}
-          onDropToPool={handleUnassignTask}
-        />
-
-        {/* 导航和视图切换 */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            {viewMode !== "list" && (
-              <>
-                <Button variant="outline" size="icon" onClick={navigatePrev}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" size="icon" onClick={navigateNext}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" onClick={navigateToday}>
-                  今天
-                </Button>
-              </>
-            )}
-          </div>
-          <div className="flex items-center gap-4">
-            {viewMode !== "list" && (
-              <span className="text-sm font-medium">{getDateTitle()}</span>
-            )}
-            <ToggleGroup
-              type="single"
-              value={viewMode}
-              onValueChange={(v) => v && setViewMode(v as ViewMode)}
-              className="border rounded-lg"
-            >
-              <ToggleGroupItem value="day" className="px-3">
-                <CalendarDays className="h-4 w-4 mr-1" />
-                日视图
-              </ToggleGroupItem>
-              <ToggleGroupItem value="list" className="px-3">
-                <ListTodo className="h-4 w-4 mr-1" />
-                列表
-              </ToggleGroupItem>
-            </ToggleGroup>
-          </div>
-        </div>
-
-        {/* 日视图 */}
-        {viewMode === "day" && (
-          <div className="grid grid-cols-3 gap-4">
-            {timeSlots.map((slot) => {
-              const dateStr = format(currentDate, "yyyy-MM-dd");
-              const slotTasks = getTasksByDateAndSlot(dateStr, slot.key);
-              const totalHours = getTotalHours(dateStr, slot.key);
-              const isDropTarget = draggedTask !== null;
-
-              return (
-                <Card key={slot.key} className="min-h-[400px]">
-                  <CardHeader className="p-3 pb-2">
-                    <CardTitle className="flex items-center justify-between">
-                      <span className="flex items-center gap-2 text-base">
-                        <span className="text-xl">{slot.icon}</span>
-                        {slot.label}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        {totalHours > 0 && (
-                          <Badge variant="secondary" className="text-xs">
-                            {totalHours} 小时
-                          </Badge>
-                        )}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openNewTaskForm(dateStr, slot.key)}
-                        >
-                          <Plus className="h-4 w-4 mr-1" />
-                          添加
-                        </Button>
-                      </div>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent
-                    className={`p-3 pt-0 ${isDropTarget ? "bg-muted/30 rounded-lg" : ""}`}
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, dateStr, slot.key)}
-                  >
-                    <div className="space-y-2">
-                      {slotTasks.length === 0 ? (
-                        <div className="text-sm text-muted-foreground/50 text-center py-6 border-2 border-dashed border-muted-foreground/20 rounded-lg">
-                          {isDropTarget ? "放置到此处" : "暂无任务"}
-                        </div>
-                      ) : (
-                        slotTasks.map((task) => (
-                          <TaskCard
-                            key={task.id}
-                            task={task}
-                            tag={getTagById(task.tagId)}
-                            onEdit={openEditTaskForm}
-                            onDelete={handleDeleteTask}
-                            onStatusChange={handleStatusChange}
-                            onDragStart={handleDragStart}
-                            onDragEnd={handleDragEnd}
-                            compact={false}
-                          />
-                        ))
-                      )}
+        <div className="grid flex-1 gap-6 xl:grid-cols-[280px_minmax(0,1fr)_320px]">
+          <aside className="space-y-6">
+            <Card className="border-border/70 bg-background/80 shadow-[0_18px_60px_rgba(15,23,42,0.06)] backdrop-blur">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="font-serif text-2xl">Today</CardTitle>
+                  <Badge variant="secondary">{unassignedTasks.length}</Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">Drag tasks into the calendar</p>
+              </CardHeader>
+              <CardContent className="space-y-2 pt-0">
+                {unassignedTasks.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-border bg-secondary/30 px-4 py-6 text-center text-sm text-muted-foreground">
+                    暂无待办事项
+                  </div>
+                ) : (
+                  unassignedTasks.slice(0, 6).map((task) => (
+                    <div
+                      key={task.id}
+                      className="rounded-2xl border border-border/70 bg-background/70 p-1.5 transition-transform hover:-translate-y-0.5"
+                      onClick={() => handleTaskClick(task)}
+                    >
+                      <TaskCard
+                        task={task}
+                        tag={getTagById(task.tagId)}
+                        onEdit={openEditTaskForm}
+                        onDelete={handleDeleteTask}
+                        onStatusChange={handleStatusChange}
+                        onDragStart={handleDragStart}
+                        onDragEnd={handleDragEnd}
+                        compact
+                      />
                     </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
+                  ))
+                )}
+                <Button
+                  variant="ghost"
+                  className="mt-2 w-full justify-start rounded-2xl border border-dashed border-border text-muted-foreground"
+                  onClick={() => openNewUnassignedTaskForm("normal")}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  添加未分配任务
+                </Button>
+              </CardContent>
+            </Card>
 
-        {/* 列表视图 */}
-        {viewMode === "list" && (
-          <TaskListView
-            tasks={tasks}
-            tags={tags}
-            onEdit={openEditTaskForm}
-            onDelete={handleDeleteTask}
-            onStatusChange={handleStatusChange}
-            onAssignTask={handleAssignTask}
-            onAddTask={openNewTaskForm}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-            draggedTask={draggedTask}
-          />
-        )}
+            <Card className="border-border/70 bg-background/80 shadow-[0_18px_60px_rgba(15,23,42,0.06)] backdrop-blur">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="font-serif text-xl">Tags</CardTitle>
+                  <Badge variant="secondary">{tags.length}</Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">Organize by focus</p>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <TagManager
+                  tags={tags}
+                  onAdd={handleAddTag}
+                  onUpdate={handleUpdateTag}
+                  onDelete={handleDeleteTag}
+                />
+              </CardContent>
+            </Card>
+          </aside>
 
-        {/* 任务表单 */}
+          <main className="space-y-6">
+            <Card className="border-border/70 bg-background/80 shadow-[0_18px_60px_rgba(15,23,42,0.06)] backdrop-blur">
+              <CardHeader className="space-y-4 border-b border-border/70 pb-4">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <CardTitle className="font-serif text-3xl">Plan your day</CardTitle>
+                    <p className="mt-1 text-sm text-muted-foreground">{getDateTitle()}</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button variant="outline" size="icon" className="rounded-full" onClick={navigatePrev}>
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" size="icon" className="rounded-full" onClick={navigateNext}>
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" className="rounded-full" onClick={navigateToday}>
+                      今天
+                    </Button>
+                    <ToggleGroup
+                      type="single"
+                      value={viewMode}
+                      onValueChange={(v) => v && setViewMode(v as ViewMode)}
+                      className="rounded-full border border-border bg-background p-1"
+                    >
+                      <ToggleGroupItem value="day" className="rounded-full px-3">
+                        <CalendarDays className="mr-1 h-4 w-4" />
+                        日视图
+                      </ToggleGroupItem>
+                      <ToggleGroupItem value="list" className="rounded-full px-3">
+                        <ListTodo className="mr-1 h-4 w-4" />
+                        列表
+                      </ToggleGroupItem>
+                    </ToggleGroup>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-7 gap-2">
+                  {weekDays.map((day) => {
+                    const isCurrent = isSameDay(day, currentDate);
+                    const isTodayDay = isToday(day);
+                    return (
+                      <button
+                        key={day.toISOString()}
+                        type="button"
+                        onClick={() => setCurrentDate(day)}
+                        className={`rounded-2xl border px-3 py-2 text-left transition-colors ${
+                          isCurrent
+                            ? "border-primary bg-primary/10 text-foreground"
+                            : "border-border bg-background/60 hover:bg-secondary/40"
+                        }`}
+                      >
+                        <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                          {format(day, "EEE", { locale: zhCN })}
+                        </div>
+                        <div className="mt-1 flex items-center justify-between gap-2">
+                          <span className="text-sm font-medium">
+                            {format(day, "MM/dd")}
+                          </span>
+                          {isTodayDay && (
+                            <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-medium text-primary-foreground">
+                              Today
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </CardHeader>
+
+              <CardContent className="pt-5">
+                {viewMode === "day" ? (
+                  <div className="grid gap-4 xl:grid-cols-3">
+                    {timeSlots.map((slot) => {
+                      const dateStr = format(currentDate, "yyyy-MM-dd");
+                      const slotTasks = getTasksByDateAndSlot(dateStr, slot.key);
+                      const totalHours = getTotalHours(dateStr, slot.key);
+                      const isDropTarget = draggedTask !== null;
+
+                      return (
+                        <div
+                          key={slot.key}
+                          className="min-h-[360px] rounded-[28px] border border-border/70 bg-secondary/20 p-4"
+                          onDragOver={handleDragOver}
+                          onDrop={(e) => handleDrop(e, dateStr, slot.key)}
+                        >
+                          <div className="mb-4 flex items-center justify-between">
+                            <div>
+                              <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                                {slot.icon} {slot.label}
+                              </div>
+                              <div className="mt-1 text-sm text-muted-foreground">
+                                {slot.key === "morning" ? "5 AM - 12 PM" : slot.key === "afternoon" ? "12 PM - 5 PM" : "5 PM - 10 PM"}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {totalHours > 0 && (
+                                <Badge variant="secondary" className="rounded-full">
+                                  {totalHours}h
+                                </Badge>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 rounded-full"
+                                onClick={() => openNewTaskForm(dateStr, slot.key)}
+                              >
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+
+                          <div
+                            className={`space-y-2 rounded-3xl border border-dashed p-3 transition-colors ${
+                              isDropTarget ? "border-primary/40 bg-background/60" : "border-transparent"
+                            }`}
+                          >
+                            {slotTasks.length === 0 ? (
+                              <div className="flex min-h-[250px] items-center justify-center rounded-2xl border border-dashed border-border bg-background/70 text-sm text-muted-foreground">
+                                {isDropTarget ? "放置到此处" : "暂无任务"}
+                              </div>
+                            ) : (
+                              slotTasks.map((task) => (
+                                <div key={task.id} onClick={() => handleTaskClick(task)}>
+                                  <TaskCard
+                                    task={task}
+                                    tag={getTagById(task.tagId)}
+                                    onEdit={openEditTaskForm}
+                                    onDelete={handleDeleteTask}
+                                    onStatusChange={handleStatusChange}
+                                    onDragStart={handleDragStart}
+                                    onDragEnd={handleDragEnd}
+                                    compact
+                                  />
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <TaskListView
+                    tasks={tasks}
+                    tags={tags}
+                    onEdit={openEditTaskForm}
+                    onDelete={handleDeleteTask}
+                    onStatusChange={handleStatusChange}
+                    onAssignTask={handleAssignTask}
+                    onAddTask={openNewTaskForm}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                    draggedTask={draggedTask}
+                  />
+                )}
+              </CardContent>
+            </Card>
+          </main>
+
+          <aside className="space-y-6">
+            <Card className="border-border/70 bg-background/80 shadow-[0_18px_60px_rgba(15,23,42,0.06)] backdrop-blur">
+              <CardHeader className="pb-3">
+                <CardTitle className="font-serif text-2xl">Today's focus</CardTitle>
+                <p className="text-sm text-muted-foreground">One clear next step</p>
+              </CardHeader>
+              <CardContent className="pt-0">
+                {selectedTask ? (
+                  <div className="space-y-4 rounded-[28px] border border-border bg-secondary/30 p-4">
+                    <div className="flex items-center justify-between">
+                      <Badge variant={selectedTask.priority === "urgent" ? "destructive" : "secondary"} className="rounded-full">
+                        {selectedTask.priority === "urgent" ? "High priority" : "Planned"}
+                      </Badge>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => setSelectedTask(null)}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div>
+                      <h3 className="font-serif text-2xl leading-tight">{selectedTask.title}</h3>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                        {selectedTask.description || "No description yet. Keep the task concise and specific."}
+                      </p>
+                    </div>
+                    <div className="grid gap-3 text-sm">
+                      <DetailRow label="Status" value={selectedTask.status === "completed" ? "Completed" : "Scheduled"} />
+                      <DetailRow label="Estimate" value={`${selectedTask.hours} hours`} />
+                      <DetailRow label="Date" value={selectedTask.date ? format(new Date(selectedTask.date), "MMM d") : "Unassigned"} />
+                      <DetailRow label="Tag" value={getTagById(selectedTask.tagId)?.name ?? "None"} />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button className="flex-1 rounded-full" onClick={() => openEditTaskForm(selectedTask)}>
+                        编辑任务
+                      </Button>
+                      {selectedTask.date ? (
+                        <Button variant="outline" className="rounded-full" onClick={() => handleUnassignTask(selectedTask.id)}>
+                          移回待办
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-[28px] border border-dashed border-border bg-secondary/20 p-4 text-sm leading-6 text-muted-foreground">
+                    点击某个任务查看详情。右侧会显示状态、时长、标签和快速操作。
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/70 bg-background/80 shadow-[0_18px_60px_rgba(15,23,42,0.06)] backdrop-blur">
+              <CardHeader className="pb-3">
+                <CardTitle className="font-serif text-xl">Quick actions</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 pt-0">
+                <Button className="w-full rounded-full" onClick={() => openNewUnassignedTaskForm("normal")}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create task
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full rounded-full"
+                  onClick={() => openNewTaskForm(format(currentDate, "yyyy-MM-dd"), "morning")}
+                >
+                  <CalendarDays className="mr-2 h-4 w-4" />
+                  Plan today
+                </Button>
+              </CardContent>
+            </Card>
+          </aside>
+        </div>
+
         <TaskForm
           open={showTaskForm}
           onOpenChange={setShowTaskForm}
@@ -868,6 +1023,15 @@ export default function Home() {
           }}
         />
       </div>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between rounded-2xl border border-border bg-background/70 px-3 py-2">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium text-foreground">{value}</span>
     </div>
   );
 }
