@@ -1,4 +1,15 @@
-import { pgTable, serial, timestamp, varchar, text, integer, boolean, numeric, index } from "drizzle-orm/pg-core"
+import {
+  pgTable,
+  serial,
+  timestamp,
+  varchar,
+  text,
+  integer,
+  boolean,
+  numeric,
+  index,
+  uuid,
+  } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 import { createSchemaFactory } from "drizzle-zod"
 import { z } from "zod"
@@ -9,6 +20,16 @@ export const healthCheck = pgTable("health_check", {
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),
 });
 
+// 用户档案表
+export const profiles = pgTable("profiles", {
+  id: uuid("id").primaryKey(),
+  email: varchar("email", { length: 255 }).notNull().unique(),
+  displayName: varchar("display_name", { length: 120 }),
+  avatarUrl: text("avatar_url"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 // 标签表
 export const tags = pgTable(
   "tags",
@@ -16,6 +37,7 @@ export const tags = pgTable(
     id: varchar("id", { length: 36 })
       .primaryKey()
       .default(sql`gen_random_uuid()`),
+    userId: uuid("user_id").notNull(),
     name: varchar("name", { length: 50 }).notNull(),
     color: varchar("color", { length: 20 }).notNull().default("#6366f1"),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -23,6 +45,7 @@ export const tags = pgTable(
       .notNull(),
   },
   (table) => [
+    index("tags_user_id_idx").on(table.userId),
     index("tags_name_idx").on(table.name),
   ]
 );
@@ -34,6 +57,7 @@ export const tasks = pgTable(
     id: varchar("id", { length: 36 })
       .primaryKey()
       .default(sql`gen_random_uuid()`),
+    userId: uuid("user_id").notNull(),
     title: varchar("title", { length: 200 }).notNull(),
     description: text("description"),
     date: varchar("date", { length: 10 }), // 格式: YYYY-MM-DD，null 表示未分配
@@ -48,6 +72,7 @@ export const tasks = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }),
   },
   (table) => [
+    index("tasks_user_id_idx").on(table.userId),
     index("tasks_date_idx").on(table.date),
     index("tasks_time_slot_idx").on(table.timeSlot),
     index("tasks_status_idx").on(table.status),
@@ -98,6 +123,7 @@ export const updateTaskSchema = createCoercedInsertSchema(tasks)
   .partial();
 
 // TypeScript types
+export type Profile = typeof profiles.$inferSelect;
 export type Tag = typeof tags.$inferSelect;
 export type InsertTag = z.infer<typeof insertTagSchema>;
 export type UpdateTag = z.infer<typeof updateTagSchema>;
