@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseClient } from "@/storage/database/supabase-client";
+import { requireSupabaseUser } from "@/storage/database/supabase-route";
 import { z } from "zod";
 
 // 定义任务更新的 schema
@@ -20,13 +20,17 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const client = getSupabaseClient();
+    const { supabase, user } = await requireSupabaseUser(request);
+    if (!supabase || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const { id } = await params;
 
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from("tasks")
-      .select("*")
+      .select("id,title,description,date,time_slot,hours,tag_id,priority,status,created_at,updated_at")
       .eq("id", id)
+      .eq("user_id", user.id)
       .single();
 
     if (error) {
@@ -62,7 +66,10 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const client = getSupabaseClient();
+    const { supabase, user } = await requireSupabaseUser(request);
+    if (!supabase || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const { id } = await params;
     const body = await request.json();
 
@@ -82,11 +89,12 @@ export async function PUT(
     if (validatedData.priority !== undefined) dbData.priority = validatedData.priority;
     if (validatedData.status !== undefined) dbData.status = validatedData.status;
 
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from("tasks")
       .update(dbData)
       .eq("id", id)
-      .select()
+      .eq("user_id", user.id)
+      .select("id,title,description,date,time_slot,hours,tag_id,priority,status,created_at,updated_at")
       .single();
 
     if (error) {
@@ -128,10 +136,13 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const client = getSupabaseClient();
+    const { supabase, user } = await requireSupabaseUser(request);
+    if (!supabase || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const { id } = await params;
 
-    const { error } = await client.from("tasks").delete().eq("id", id);
+    const { error } = await supabase.from("tasks").delete().eq("id", id).eq("user_id", user.id);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
