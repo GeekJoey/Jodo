@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { format, addDays, startOfWeek, isSameDay, addWeeks, subWeeks, isToday } from "date-fns";
 import { zhCN } from "date-fns/locale";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +16,8 @@ import { TagManager } from "@/components/TagManager";
 import { TaskPool } from "@/components/TaskPool";
 import { TaskListView } from "@/components/TaskListView";
 import { Task, Tag, InsertTask, TimeSlot, TaskStatus, TaskPriority } from "@/types";
+import { AuthShell } from "@/components/auth-shell";
+import { createSupabaseBrowserClient } from "@/storage/database/supabase-browser";
 
 const timeSlots: { key: TimeSlot; label: string; icon: string }[] = [
   { key: "morning", label: "上午", icon: "🌅" },
@@ -25,9 +28,12 @@ const timeSlots: { key: TimeSlot; label: string; icon: string }[] = [
 type ViewMode = "day" | "list";
 
 export default function Home() {
+  const router = useRouter();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [unassignedTasks, setUnassignedTasks] = useState<Task[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
+  const [currentUser, setCurrentUser] = useState<{ email?: string | null } | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>("day");
@@ -40,6 +46,31 @@ export default function Home() {
   const [draggedTask, setDraggedTask] = useState<Task | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
+    let alive = true;
+
+    supabase.auth.getUser().then(({ data }) => {
+      if (!alive) {
+        return;
+      }
+      setCurrentUser(data.user);
+      setAuthLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setCurrentUser(session?.user ?? null);
+      setAuthLoading(false);
+    });
+
+    return () => {
+      alive = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   // 检测移动端
   useEffect(() => {
@@ -114,13 +145,23 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (!currentUser) {
+      return;
+    }
+
     const loadData = async () => {
       setLoading(true);
       await Promise.all([loadTasks(), loadUnassignedTasks(), loadTags()]);
       setLoading(false);
     };
     loadData();
-  }, [loadTasks, loadUnassignedTasks, loadTags]);
+  }, [currentUser, loadTasks, loadUnassignedTasks, loadTags]);
+
+  const handleSignOut = async () => {
+    const supabase = createSupabaseBrowserClient();
+    await supabase.auth.signOut();
+    router.refresh();
+  };
 
   // 创建任务
   const handleCreateTask = async (data: InsertTask) => {
@@ -374,6 +415,18 @@ export default function Home() {
     return `${dateStr} ${weekday}${todayMark}`;
   };
 
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return <AuthShell />;
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -389,13 +442,23 @@ export default function Home() {
         <div className="p-3">
           {/* 头部 */}
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-xl font-bold">任务管理</h1>
-            <TagManager
-              tags={tags}
-              onAdd={handleAddTag}
-              onUpdate={handleUpdateTag}
-              onDelete={handleDeleteTag}
-            />
+            <div>
+              <h1 className="text-xl font-bold">任务管理</h1>
+              <p className="text-xs text-muted-foreground">
+                {currentUser.email ? `已登录为 ${currentUser.email}` : "已登录"}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleSignOut}>
+                退出
+              </Button>
+              <TagManager
+                tags={tags}
+                onAdd={handleAddTag}
+                onUpdate={handleUpdateTag}
+                onDelete={handleDeleteTag}
+              />
+            </div>
           </div>
 
           {/* 选中任务提示 */}
@@ -633,12 +696,23 @@ export default function Home() {
               拖拽待办事项到日历进行分配，或拖回待办池
             </p>
           </div>
-          <TagManager
-            tags={tags}
-            onAdd={handleAddTag}
-            onUpdate={handleUpdateTag}
-            onDelete={handleDeleteTag}
-          />
+          <div className="flex items-center gap-2">
+            <div className="text-right">
+              <p className="text-xs text-muted-foreground">当前用户</p>
+              <p className="text-sm font-medium">
+                {currentUser.email ?? "已登录"}
+              </p>
+            </div>
+            <Button variant="outline" size="sm" onClick={handleSignOut}>
+              退出
+            </Button>
+            <TagManager
+              tags={tags}
+              onAdd={handleAddTag}
+              onUpdate={handleUpdateTag}
+              onDelete={handleDeleteTag}
+            />
+          </div>
         </div>
 
         {/* 待办事项池 */}
