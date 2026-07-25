@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseClient } from "@/storage/database/supabase-client";
+import { requireSupabaseUser } from "@/storage/database/supabase-route";
 import { updateTagSchema } from "@/storage/database/shared/schema";
 import { z } from "zod";
 
@@ -9,17 +9,21 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const client = getSupabaseClient();
+    const { supabase, user } = await requireSupabaseUser(request);
+    if (!supabase || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const { id } = await params;
     const body = await request.json();
 
     const validatedData = updateTagSchema.parse(body);
 
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from("tags")
       .update(validatedData)
       .eq("id", id)
-      .select()
+      .eq("user_id", user.id)
+      .select("id,name,color,created_at")
       .single();
 
     if (error) {
@@ -52,10 +56,13 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const client = getSupabaseClient();
+    const { supabase, user } = await requireSupabaseUser(request);
+    if (!supabase || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const { id } = await params;
 
-    const { error } = await client.from("tags").delete().eq("id", id);
+    const { error } = await supabase.from("tags").delete().eq("id", id).eq("user_id", user.id);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
