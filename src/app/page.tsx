@@ -36,7 +36,6 @@ import { Task, Tag, InsertTask, TimeSlot, TaskStatus, TaskPriority } from "@/typ
 import { AuthShell } from "@/components/auth-shell";
 import { createSupabaseBrowserClient } from "@/storage/database/supabase-browser";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 const timeSlots: { key: TimeSlot; label: string; icon: string }[] = [
@@ -744,8 +743,9 @@ export default function Home() {
           </div>
         </div>
 
-        <main className="space-y-6">
-          <Card className="border-border/70 bg-background/80 shadow-[0_18px_60px_rgba(15,23,42,0.06)] backdrop-blur">
+        <div className={`grid gap-6 ${workspaceOpen ? "xl:grid-cols-[minmax(0,1fr)_420px]" : ""}`}>
+          <main className="space-y-6">
+            <Card className="border-border/70 bg-background/80 shadow-[0_18px_60px_rgba(15,23,42,0.06)] backdrop-blur">
             <CardHeader className="space-y-4 border-b border-border/70 pb-4">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="max-w-2xl">
@@ -905,18 +905,32 @@ export default function Home() {
               )}
             </CardContent>
           </Card>
-        </main>
+          </main>
 
-        <Sheet open={workspaceOpen} onOpenChange={setWorkspaceOpen}>
-          <SheetContent side="right" className="w-full border-l border-border/70 sm:max-w-[540px]">
-            <SheetHeader className="border-b border-border/70 pr-10">
-              <SheetTitle className="font-serif text-2xl">Workspace</SheetTitle>
-              <SheetDescription>
-                把侧边模块收纳到这里，主画布就能保持完整宽度。
-              </SheetDescription>
-            </SheetHeader>
+          {workspaceOpen && (
+            <aside className="space-y-3 xl:sticky xl:top-5 xl:h-[calc(100vh-2.5rem)] xl:overflow-y-auto">
+              <Card className="border-border/70 bg-background/80 shadow-[0_18px_60px_rgba(15,23,42,0.06)] backdrop-blur">
+                <CardHeader className="border-b border-border/70 pb-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <CardTitle className="font-serif text-2xl">Workspace</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        侧边模块折叠在这里，不会盖住主画布。
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 rounded-full"
+                      onClick={() => setWorkspaceOpen(false)}
+                      aria-label="关闭 Workspace"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardHeader>
+              </Card>
 
-            <div className="flex-1 space-y-3 overflow-y-auto p-4">
               <WorkspaceSection
                 title="Today"
                 description="Drag tasks into the calendar"
@@ -1028,9 +1042,9 @@ export default function Home() {
                   </Button>
                 </div>
               </WorkspaceSection>
-            </div>
-          </SheetContent>
-        </Sheet>
+            </aside>
+          )}
+        </div>
 
         <TaskForm
           open={showTaskForm}
